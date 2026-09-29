@@ -1,0 +1,293 @@
+// PULL-IA — Prisma Schema
+// Database: PostgreSQL (Supabase)
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────
+// AUTH (NextAuth.js v5 adapter tables)
+// ─────────────────────────────────────────────
+
+model User {
+  id            String          @id @default(cuid())
+  name          String?
+  email         String          @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole        @default(ADMIN)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────────
+// NEWS SOURCES
+// ─────────────────────────────────────────────
+
+model Source {
+  id              String      @id @default(cuid())
+  name            String      @unique
+  slug            String      @unique
+  url             String
+  feedUrl         String?     // RSS feed URL if applicable
+  type            SourceType
+  category        Category[]  // which categories this source covers
+  language        String      @default("en")
+  reputationScore Float       @default(0.5) // 0.0 - 1.0
+  isActive        Boolean     @default(true)
+  lastFetchedAt   DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  articles        Article[]
+
+  @@map("sources")
+}
+
+// ─────────────────────────────────────────────
+// ARTICLES (raw ingested)
+// ─────────────────────────────────────────────
+
+model Article {
+  id          String         @id @default(cuid())
+  title       String
+  url         String         @unique
+  urlHash     String         @unique // SHA-256 of URL for fast dedup
+  rawContent  String?        @db.Text
+  author      String?
+  imageUrl    String?
+  publishedAt DateTime?
+  fetchedAt   DateTime       @default(now())
+  status      ArticleStatus  @default(PENDING)
+  sourceId    String
+  source      Source         @relation(fields: [sourceId], references: [id])
+  summary     ArticleSummary?
+  tags        ArticleTag[]
+  clusterId   String?
+  cluster     ArticleCluster? @relation(fields: [clusterId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([urlHash])
+  @@index([status])
+  @@index([fetchedAt])
+  @@index([clusterId])
+  @@map("articles")
+}
+
+// ─────────────────────────────────────────────
+// AI-GENERATED SUMMARIES
+// ─────────────────────────────────────────────
+
+model ArticleSummary {
+  id             String     @id @default(cuid())
+  articleId      String     @unique
+  article        Article    @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  summaryEs      String     @db.Text  // Spanish summary
+  summaryEn      String     @db.Text  // English summary
+  titleEs        String                // Spanish title
+  titleEn        String                // English title
+  category       Category
+  relevanceScore Float               // 0.0 - 1.0 (AI scored)
+  finalScore     Float               // combined score (relevance * reputation * freshness)
+  keyPoints      String[]            // bullet points
+  sourceUrls     String[]            // original URLs that support this summary (traceability)
+  aiModel        String              // which model generated this
+  generatedAt    DateTime   @default(now())
+
+  @@map("article_summaries")
+}
+
+// ─────────────────────────────────────────────
+// DEDUPLICATION CLUSTERS
+// ─────────────────────────────────────────────
+
+model ArticleCluster {
+  id             String    @id @default(cuid())
+  canonicalTitle String    // best title for this cluster
+  topic          String    // brief topic description
+  articles       Article[]
+  createdAt      DateTime  @default(now())
+
+  @@map("article_clusters")
+}
+
+// ─────────────────────────────────────────────
+// TAGS
+// ─────────────────────────────────────────────
+
+model Tag {
+  id       String       @id @default(cuid())
+  nameEs   String       @unique
+  nameEn   String       @unique
+  articles ArticleTag[]
+
+  @@map("tags")
+}
+
+model ArticleTag {
+  articleId String
+  tagId     String
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@map("article_tags")
+}
+
+// ─────────────────────────────────────────────
+// NEWSLETTER SUBSCRIBERS
+// ─────────────────────────────────────────────
+
+model Subscriber {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String?
+  locale          String           @default("es") // es | en
+  interests       Category[]       // preferred categories
+  confirmed       Boolean          @default(false)
+  confirmToken    String           @unique @default(cuid())
+  unsubscribeToken String          @unique @default(cuid())
+  subscribedAt    DateTime         @default(now())
+  confirmedAt     DateTime?
+  unsubscribedAt  DateTime?
+  status          SubscriberStatus @default(PENDING)
+  sends           NewsletterSend[]
+
+  @@index([email])
+  @@index([status])
+  @@map("subscribers")
+}
+
+// ─────────────────────────────────────────────
+// NEWSLETTER ISSUES
+// ─────────────────────────────────────────────
+
+model NewsletterIssue {
+  id          String           @id @default(cuid())
+  issueNumber Int              @unique @default(autoincrement())
+  titleEs     String
+  titleEn     String
+  articleIds  String[]         // IDs of top articles included
+  status      IssueStatus      @default(DRAFT)
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  createdAt   DateTime         @default(now())
+  sends       NewsletterSend[]
+
+  @@map("newsletter_issues")
+}
+
+model NewsletterSend {
+  id          String           @id @default(cuid())
+  subscriberId String
+  issueId     String
+  subscriber  Subscriber       @relation(fields: [subscriberId], references: [id])
+  issue       NewsletterIssue  @relation(fields: [issueId], references: [id])
+  status      SendStatus       @default(PENDING)
+  sentAt      DateTime?
+  openedAt    DateTime?
+
+  @@unique([subscriberId, issueId])
+  @@map("newsletter_sends")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  EDITOR
+}
+
+enum SourceType {
+  RSS
+  API
+  SCRAPER
+}
+
+enum Category {
+  AI
+  ENGINEERING
+  PROGRAMMING
+  EMPLOYABILITY
+}
+
+enum ArticleStatus {
+  PENDING      // fetched, not yet processed
+  PROCESSING   // being processed by AI
+  PUBLISHED    // visible on site
+  REJECTED     // AI scored below threshold or admin rejected
+  DUPLICATE    // merged into a cluster
+}
+
+enum SubscriberStatus {
+  PENDING       // awaiting email confirmation
+  CONFIRMED     // double opt-in completed
+  UNSUBSCRIBED  // opted out
+}
+
+enum IssueStatus {
+  DRAFT
+  READY
+  SENDING
+  SENT
+}
+
+enum SendStatus {
+  PENDING
+  SENT
+  FAILED
+  BOUNCED
+}
