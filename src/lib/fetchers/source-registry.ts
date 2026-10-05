@@ -133,8 +133,5 @@ export function getAllFetchers(): BaseFetcher[] {
  * Get the config objects for seeding the database sources table.
  */
 export function getSourceConfigs() {
-  return getAllFetchers().map((f) => ({
-    name: f.sourceName,
-    slug: f.sourceSlug,
-  }));
+  return getAllFetchers().map((f) => f.sourceConfig);
 }

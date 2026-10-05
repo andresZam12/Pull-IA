@@ -33,6 +33,13 @@ export abstract class BaseFetcher {
   }
 
   /**
+   * Read-only copy of the full config (used by the database seed).
+   */
+  get sourceConfig(): Readonly<FetcherConfig> {
+    return { ...this.config };
+  }
+
+  /**
    * Safely fetch with timeout and error handling.
    * Returns empty array on failure so the pipeline continues.
    */
