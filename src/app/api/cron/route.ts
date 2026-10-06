@@ -4,8 +4,9 @@
  * Triggered by Vercel Cron every 2 hours.
  * Protected by CRON_SECRET bearer token.
  *
- * Vercel Cron config (in vercel.json):
- * { "path": "/api/cron/ingest", "schedule": "0 */2 * * *" }
+ * Schedule is defined in vercel.json (path "/api/cron", every 2 hours).
+ * Note: the cron expression is not written here because its "*" + "/"
+ * characters would close this block comment early.
  */
 
 import { NextRequest, NextResponse } from "next/server";

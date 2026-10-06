@@ -9,7 +9,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import type { SummaryResult, RawArticle } from "@/types";
 
-const MODEL = "gemini-1.5-flash";
+const MODEL = "gemini-3.8-flash";
 
 const summarySchema = {
   type: SchemaType.OBJECT,
@@ -67,18 +67,31 @@ export class ArticleSummarizer {
    * present in the source text — this prevents hallucination.
    */
   async summarize(article: RawArticle): Promise<SummaryResult> {
-    const prompt = this.buildPrompt(article);
-    const result = await this.model.generateContent(prompt);
-    const parsed = JSON.parse(result.response.text()) as Omit<SummaryResult, "aiModel">;
+    try {
+      const prompt = this.buildPrompt(article);
+      const result = await this.model.generateContent(prompt);
+      const parsed = JSON.parse(result.response.text()) as Omit<SummaryResult, "aiModel">;
 
-    return {
-      ...parsed,
-      // Always include the original article URL for traceability
-      sourceUrls: Array.from(
-        new Set([article.url, ...(parsed.sourceUrls ?? [])])
-      ).filter(Boolean),
-      aiModel: this.modelName,
-    };
+      return {
+        ...parsed,
+        sourceUrls: Array.from(
+          new Set([article.url, ...(parsed.sourceUrls ?? [])])
+        ).filter(Boolean),
+        aiModel: this.modelName,
+      };
+    } catch (error) {
+      console.warn(`[Summarizer] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using fallback summary.`);
+      const cleanSnippet = (article.rawContent || article.title).slice(0, 300).trim();
+      return {
+        titleEs: article.title,
+        titleEn: article.title,
+        summaryEs: cleanSnippet,
+        summaryEn: cleanSnippet,
+        keyPoints: [article.title],
+        sourceUrls: [article.url],
+        aiModel: "heuristic-fallback",
+      };
+    }
   }
 
   private buildPrompt(article: RawArticle): string {

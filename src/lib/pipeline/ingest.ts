@@ -49,11 +49,17 @@ export class IngestionPipeline {
     let published = 0;
     let rejected = 0;
 
-    // Step 3-5: Process each new article
-    for (const article of newArticles) {
+    // Process in small batches of 5 articles with delay to respect Gemini free-tier rate limits (15 RPM)
+    const batch = newArticles.slice(0, 5);
+    console.log(`[Pipeline] Processing batch of ${batch.length} articles...`);
+
+    // Step 3-5: Process each article in the batch
+    for (const article of batch) {
       try {
         await this.processArticle(article);
         published++;
+        // Small delay between articles to avoid rate limits
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.errors.push({
@@ -130,9 +136,11 @@ export class IngestionPipeline {
   // ─────────────────────────────────────────────
 
   private async processArticle(article: RawArticle): Promise<void> {
-    // Find or create the source in DB
+    // Find or create the source in DB.
+    // We match by `name` (unique) because the seed already saved each source
+    // with its official slug (e.g. "devto"), which slugify() would not reproduce.
     const source = await prisma.source.upsert({
-      where: { slug: this.slugify(article.sourceName) },
+      where: { name: article.sourceName },
       update: { lastFetchedAt: new Date() },
       create: {
         name: article.sourceName,
