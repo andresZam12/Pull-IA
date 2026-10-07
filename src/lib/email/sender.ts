@@ -7,7 +7,9 @@
 
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 const FROM = `${process.env.RESEND_FROM_NAME ?? "PULL-IA"} <${process.env.RESEND_FROM_EMAIL ?? "newsletter@pull-ia.com"}>`;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://pull-ia.com";
@@ -32,6 +34,11 @@ export async function sendConfirmationEmail(
       ? buildConfirmationHtmlEs(confirmUrl)
       : buildConfirmationHtmlEn(confirmUrl);
 
+  if (!resend) {
+    console.warn("[Email] RESEND_API_KEY not configured. Skipping confirmation email.");
+    return;
+  }
+
   const { error } = await resend.emails.send({
     from: FROM,
     to: email,
@@ -54,6 +61,11 @@ export async function sendNewsletterEmail(
   subject: string
 ): Promise<void> {
   const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${unsubscribeToken}`;
+
+  if (!resend) {
+    console.warn("[Email] RESEND_API_KEY not configured. Skipping newsletter email.");
+    return;
+  }
 
   const { error } = await resend.emails.send({
     from: FROM,

@@ -9,23 +9,29 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { NextRequest, NextResponse } from "next/server";
 
-// Different limits for different endpoints
-const limits = {
-  subscribe: new Ratelimit({
-    redis: Redis.fromEnv(),
-    limiter: Ratelimit.slidingWindow(5, "1 h"), // 5 subscribe attempts per hour per IP
-    analytics: true,
-    prefix: "pull-ia:subscribe",
-  }),
-  api: new Ratelimit({
-    redis: Redis.fromEnv(),
-    limiter: Ratelimit.slidingWindow(60, "1 m"), // 60 requests per minute
-    analytics: true,
-    prefix: "pull-ia:api",
-  }),
-};
+const isRedisConfigured = Boolean(
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+);
 
-type LimitType = keyof typeof limits;
+// Different limits for different endpoints (only initialized if Redis credentials exist)
+const limits = isRedisConfigured
+  ? {
+      subscribe: new Ratelimit({
+        redis: Redis.fromEnv(),
+        limiter: Ratelimit.slidingWindow(5, "1 h"), // 5 subscribe attempts per hour per IP
+        analytics: true,
+        prefix: "pull-ia:subscribe",
+      }),
+      api: new Ratelimit({
+        redis: Redis.fromEnv(),
+        limiter: Ratelimit.slidingWindow(60, "1 m"), // 60 requests per minute
+        analytics: true,
+        prefix: "pull-ia:api",
+      }),
+    }
+  : null;
+
+type LimitType = "subscribe" | "api";
 
 /**
  * Apply rate limiting to a request.
@@ -35,6 +41,10 @@ export async function applyRateLimit(
   request: NextRequest,
   type: LimitType = "api"
 ): Promise<NextResponse | null> {
+  if (!limits) {
+    return null; // Bypass rate limiting if Redis credentials are not configured
+  }
+
   // Get client IP (Vercel provides X-Forwarded-For)
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
