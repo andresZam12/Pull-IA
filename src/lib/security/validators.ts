@@ -74,7 +74,7 @@ export async function parseBody<T>(
     if (err instanceof z.ZodError) {
       return {
         data: null,
-        error: err.errors.map((e) => e.message).join(", "),
+        error: err.issues.map((e) => e.message).join(", "),
       };
     }
     return { data: null, error: "Invalid request body" };

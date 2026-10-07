@@ -6,12 +6,12 @@
  * All summaries are grounded in the source text — no hallucination.
  */
 
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import type { SummaryResult, RawArticle } from "@/types";
 
 const MODEL = "gemini-3.8-flash";
 
-const summarySchema = {
+const summarySchema: Schema = {
   type: SchemaType.OBJECT,
   properties: {
     titleEs: {

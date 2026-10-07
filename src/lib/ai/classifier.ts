@@ -6,7 +6,7 @@
  * Always returns structured JSON via Gemini's JSON mode.
  */
 
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import type { ClassificationResult, RawArticle } from "@/types";
 import { Category } from "@/types";
 
@@ -14,11 +14,12 @@ const MODEL = "gemini-3.8-flash";
 const RELEVANCE_THRESHOLD = 0.4; // articles below this are rejected
 
 // JSON schema for structured output
-const classificationSchema = {
+const classificationSchema: Schema = {
   type: SchemaType.OBJECT,
   properties: {
     category: {
       type: SchemaType.STRING,
+      format: "enum",
       enum: Object.values(Category),
       description: "The primary category for this article",
     },
