@@ -1,9 +1,10 @@
 import prisma from "@/lib/db/prisma";
 import { ArticleStatus } from "@/types";
 import { NewsFeed } from "@/components/news/NewsFeed";
+import { LanguageProvider } from "@/context/LanguageContext";
 import type { ArticleItem } from "@/components/news/NewsCard";
 
-// Revalidate page data every 60 seconds
+// Revalidate page data every 60 seconds (Incremental Static Regeneration)
 export const revalidate = 60;
 
 export default async function HomePage() {
@@ -22,7 +23,7 @@ export default async function HomePage() {
       orderBy: {
         fetchedAt: "desc",
       },
-      take: 30,
+      take: 40,
     });
 
     // Transform data to match NewsCard interface
@@ -31,6 +32,7 @@ export default async function HomePage() {
       url: a.url,
       sourceName: a.source.name,
       sourceUrl: a.source.url,
+      imageUrl: a.imageUrl,
       publishedAt: a.publishedAt ?? a.fetchedAt,
       summary: a.summary
         ? {
@@ -49,5 +51,9 @@ export default async function HomePage() {
     console.error("[HomePage] Error loading articles from database:", error);
   }
 
-  return <NewsFeed initialArticles={articles} />;
+  return (
+    <LanguageProvider>
+      <NewsFeed initialArticles={articles} />
+    </LanguageProvider>
+  );
 }

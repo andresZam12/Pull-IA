@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useLanguage } from "@/context/LanguageContext";
 
-interface FooterProps {
-  locale?: "es" | "en";
-}
-
-export function Footer({ locale = "es" }: FooterProps) {
+export function Footer() {
+  const { locale, t } = useLanguage();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -29,19 +27,15 @@ export function Footer({ locale = "es" }: FooterProps) {
 
       if (res.ok && data.success) {
         setStatus("success");
-        setMessage(
-          locale === "es"
-            ? "¡Listo! Te enviamos un correo para confirmar tu suscripción."
-            : "Awesome! We sent you an email to confirm your subscription."
-        );
+        setMessage(t.newsletter.success);
         setEmail("");
       } else {
         setStatus("error");
-        setMessage(data.error || (locale === "es" ? "Hubo un error al suscribirte." : "Failed to subscribe."));
+        setMessage(data.error || t.newsletter.error);
       }
     } catch {
       setStatus("error");
-      setMessage(locale === "es" ? "Error de conexión. Intenta de nuevo." : "Network error. Please try again.");
+      setMessage(t.newsletter.error);
     }
   };
 
@@ -50,22 +44,18 @@ export function Footer({ locale = "es" }: FooterProps) {
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         
         {/* Newsletter Section */}
-        <div className="rounded-3xl border border-indigo-500/20 bg-gradient-to-b from-indigo-950/30 via-zinc-900/40 to-zinc-950 p-8 sm:p-12 lg:p-16">
+        <div className="rounded-3xl border border-indigo-500/20 bg-gradient-to-b from-indigo-950/40 via-zinc-900/40 to-zinc-950 p-8 sm:p-12 lg:p-16 shadow-2xl shadow-indigo-950/20">
           <div className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300">
-              {locale === "es" ? "Boletín Semanal Gratuito" : "Free Weekly Newsletter"}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-1 text-xs font-bold text-indigo-300">
+              {t.newsletter.badge}
             </span>
 
             <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-              {locale === "es"
-                ? "Las noticias tech más importantes, cada viernes"
-                : "The most important tech news, every Friday"}
+              {t.newsletter.title}
             </h2>
 
             <p className="mt-4 text-sm leading-relaxed text-zinc-300 sm:text-base">
-              {locale === "es"
-                ? "Sin spam ni relleno. Solo resúmenes de alto impacto sobre IA, ingeniería de software y mercado laboral, verificados por la arquitectura PULL-IA."
-                : "Zero spam. Only high-impact summaries on AI, software engineering, and the tech job market, powered by PULL-IA."}
+              {t.newsletter.description}
             </p>
 
             <form onSubmit={handleSubscribe} className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -73,24 +63,22 @@ export function Footer({ locale = "es" }: FooterProps) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={locale === "es" ? "tu.correo@empresa.com" : "your.email@company.com"}
+                placeholder={t.newsletter.placeholder}
                 required
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-900/90 px-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 sm:max-w-md"
+                className="w-full rounded-2xl border border-zinc-700 bg-zinc-900/90 px-4 py-3.5 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 sm:max-w-md shadow-inner"
               />
               <button
                 type="submit"
                 disabled={status === "loading"}
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50"
+                className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 transition hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50"
               >
-                {status === "loading"
-                  ? locale === "es" ? "Enviando..." : "Subscribing..."
-                  : locale === "es" ? "Suscribirme" : "Subscribe"}
+                {status === "loading" ? t.newsletter.subscribing : t.newsletter.button}
               </button>
             </form>
 
             {message && (
               <p
-                className={`mt-4 text-xs font-medium ${
+                className={`mt-4 text-xs font-semibold ${
                   status === "success" ? "text-emerald-400" : "text-rose-400"
                 }`}
               >
@@ -98,10 +86,8 @@ export function Footer({ locale = "es" }: FooterProps) {
               </p>
             )}
 
-            <p className="mt-3 text-xs text-zinc-400">
-              {locale === "es"
-                ? "Doble confirmación (Double opt-in). Puedes cancelar tu suscripción en cualquier momento."
-                : "Double opt-in. You can unsubscribe at any time with one click."}
+            <p className="mt-3 text-xs text-zinc-500">
+              {t.newsletter.disclaimer}
             </p>
           </div>
         </div>
@@ -109,21 +95,21 @@ export function Footer({ locale = "es" }: FooterProps) {
         {/* Footer Meta & Brand */}
         <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-zinc-800/60 pt-8 sm:flex-row">
           <div className="flex items-center gap-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 font-mono text-sm font-bold text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 font-mono text-sm font-bold text-white shadow-md shadow-indigo-500/20">
               D
             </span>
             <span className="text-base font-black text-white">Deplhoy</span>
-            <span className="text-xs text-zinc-400">
-              • Engine: <span className="font-semibold text-zinc-300">PULL-IA</span>
+            <span className="text-xs text-zinc-500">
+              • Engine: <span className="font-semibold text-zinc-400">PULL-IA</span>
             </span>
           </div>
 
-          <div className="text-center text-xs text-zinc-400 sm:text-right">
-            <p>
-              Programación Orientada a la Web • Semestre 7
+          <div className="text-center text-xs text-zinc-500 sm:text-right">
+            <p className="font-medium text-zinc-400">
+              {t.footerAcademic}
             </p>
-            <p className="mt-1 text-zinc-400">
-              Next.js 16 • Supabase PostgreSQL • Google Gemini • Vercel
+            <p className="mt-1 text-zinc-500">
+              {t.footerStack}
             </p>
           </div>
         </div>

@@ -1,0 +1,132 @@
+export type Locale = "es" | "en";
+
+export interface TranslationSchema {
+  brandSubtitle: string;
+  heroBadge: string;
+  heroTitlePrefix: string;
+  heroTitleHighlight: string;
+  heroDescription: string;
+  searchPlaceholder: string;
+  categories: {
+    ALL: string;
+    AI: string;
+    ENGINEERING: string;
+    PROGRAMMING: string;
+    EMPLOYABILITY: string;
+  };
+  latestUpdates: string;
+  categoryPrefix: string;
+  showAll: string;
+  readMore: string;
+  verifiedAi: string;
+  originalSource: string;
+  readingTime: string;
+  publishedOn: string;
+  keyPointsTitle: string;
+  fullSummaryTitle: string;
+  closeModal: string;
+  noArticlesFound: string;
+  noArticlesDesc: string;
+  newsletter: {
+    badge: string;
+    title: string;
+    description: string;
+    placeholder: string;
+    button: string;
+    subscribing: string;
+    success: string;
+    error: string;
+    disclaimer: string;
+  };
+  footerAcademic: string;
+  footerStack: string;
+}
+
+export const translations: Record<Locale, TranslationSchema> = {
+  es: {
+    brandSubtitle: "powered by PULL-IA",
+    heroBadge: "Noticias globales curadas con Inteligencia Artificial",
+    heroTitlePrefix: "Todo lo que importa en tech, ",
+    heroTitleHighlight: "sin el ruido.",
+    heroDescription:
+      "Deplhoy rastrea fuentes oficiales globales y genera síntesis de alto impacto con IA para programadores e ingenieros de software en Latinoamérica.",
+    searchPlaceholder: "Buscar por palabra clave, fuente o tema...",
+    categories: {
+      ALL: "Todas",
+      AI: "Inteligencia Artificial",
+      ENGINEERING: "Ingeniería",
+      PROGRAMMING: "Programación",
+      EMPLOYABILITY: "Empleabilidad",
+    },
+    latestUpdates: "Últimas publicaciones",
+    categoryPrefix: "Categoría:",
+    showAll: "Mostrar todas",
+    readMore: "Ver más",
+    verifiedAi: "Resumen verificado con IA",
+    originalSource: "Leer en fuente original",
+    readingTime: "min de lectura",
+    publishedOn: "Publicado el",
+    keyPointsTitle: "Puntos clave de la noticia",
+    fullSummaryTitle: "Resumen detallado",
+    closeModal: "Cerrar",
+    noArticlesFound: "No se encontraron noticias",
+    noArticlesDesc: "Prueba cambiando de categoría o usando otros términos de búsqueda.",
+    newsletter: {
+      badge: "Boletín Semanal Gratuito",
+      title: "Las noticias tech más importantes, cada viernes",
+      description:
+        "Sin spam ni relleno. Solo resúmenes ejecutivos sobre IA, ingeniería y mercado laboral directamente en tu correo.",
+      placeholder: "tu.correo@empresa.com",
+      button: "Suscribirme",
+      subscribing: "Enviando...",
+      success: "¡Listo! Te enviamos un correo para confirmar tu suscripción.",
+      error: "Hubo un error al suscribirte.",
+      disclaimer: "Doble confirmación (Double opt-in). Puedes cancelar tu suscripción en cualquier momento.",
+    },
+    footerAcademic: "Programación Orientada a la Web • Semestre 7",
+    footerStack: "Next.js 16 • Supabase PostgreSQL • Google Gemini • Tailwind CSS",
+  },
+  en: {
+    brandSubtitle: "powered by PULL-IA",
+    heroBadge: "Global tech news curated with Artificial Intelligence",
+    heroTitlePrefix: "Everything that matters in tech, ",
+    heroTitleHighlight: "zero noise.",
+    heroDescription:
+      "Deplhoy tracks official global sources and delivers high-impact AI summaries for software engineers and tech leaders in Latin America.",
+    searchPlaceholder: "Search by keyword, source, or topic...",
+    categories: {
+      ALL: "All",
+      AI: "Artificial Intelligence",
+      ENGINEERING: "Engineering",
+      PROGRAMMING: "Programming",
+      EMPLOYABILITY: "Careers",
+    },
+    latestUpdates: "Latest updates",
+    categoryPrefix: "Category:",
+    showAll: "Show all",
+    readMore: "Read more",
+    verifiedAi: "AI verified summary",
+    originalSource: "Read on original source",
+    readingTime: "min read",
+    publishedOn: "Published on",
+    keyPointsTitle: "Key takeaways",
+    fullSummaryTitle: "Detailed summary",
+    closeModal: "Close",
+    noArticlesFound: "No articles found",
+    noArticlesDesc: "Try selecting a different category or search term.",
+    newsletter: {
+      badge: "Free Weekly Newsletter",
+      title: "The most important tech news, every Friday",
+      description:
+        "Zero spam. Curated executive summaries on AI, engineering, and the tech job market delivered to your inbox.",
+      placeholder: "your.email@company.com",
+      button: "Subscribe",
+      subscribing: "Subscribing...",
+      success: "Awesome! We sent you an email to confirm your subscription.",
+      error: "Failed to subscribe.",
+      disclaimer: "Double opt-in. You can unsubscribe at any time with one click.",
+    },
+    footerAcademic: "Web-Oriented Programming • Semester 7",
+    footerStack: "Next.js 16 • Supabase PostgreSQL • Google Gemini • Tailwind CSS",
+  },
+};
