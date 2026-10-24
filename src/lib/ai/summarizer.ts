@@ -8,6 +8,7 @@
 
 import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import type { SummaryResult, RawArticle } from "@/types";
+import { cleanHtmlText } from "@/lib/utils/text";
 
 const MODEL = "gemini-3.8-flash";
 
@@ -81,13 +82,14 @@ export class ArticleSummarizer {
       };
     } catch (error) {
       console.warn(`[Summarizer] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using fallback summary.`);
-      const cleanSnippet = (article.rawContent || article.title).slice(0, 300).trim();
+      const cleanTitle = cleanHtmlText(article.title);
+      const cleanSnippet = cleanHtmlText(article.rawContent || article.title).slice(0, 300).trim();
       return {
-        titleEs: article.title,
-        titleEn: article.title,
+        titleEs: cleanTitle,
+        titleEn: cleanTitle,
         summaryEs: cleanSnippet,
         summaryEn: cleanSnippet,
-        keyPoints: [article.title],
+        keyPoints: [cleanTitle],
         sourceUrls: [article.url],
         aiModel: "heuristic-fallback",
       };

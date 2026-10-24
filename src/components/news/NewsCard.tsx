@@ -3,6 +3,7 @@
 import { Category } from "@/types";
 import { useLanguage } from "@/context/LanguageContext";
 import { getArticleImage } from "@/lib/utils/images";
+import { cleanHtmlText } from "@/lib/utils/text";
 
 export interface ArticleItem {
   id: string;
@@ -45,11 +46,13 @@ export function NewsCard({ article, onOpenModal }: NewsCardProps) {
   const pillStyle = categoryPillStyles[category];
   const categoryLabel = t.categories[category] || t.categories.ENGINEERING;
 
-  const title = locale === "es" ? summary.titleEs : summary.titleEn;
-  const fullSummary = locale === "es" ? summary.summaryEs : summary.summaryEn;
-  
-  // Extract a brief, engaging hook (first sentence or max 120 chars)
-  const shortHook = fullSummary.split(". ")[0].concat(".").slice(0, 140);
+  const rawTitle = locale === "es" ? summary.titleEs : summary.titleEn;
+  const rawSummary = locale === "es" ? summary.summaryEs : summary.summaryEn;
+  const title = cleanHtmlText(rawTitle);
+  const cleanSummary = cleanHtmlText(rawSummary);
+
+  // Extract a brief, engaging hook (first sentence or max 140 chars)
+  const shortHook = cleanSummary.split(". ")[0].concat(".").slice(0, 140);
   const imageUrl = getArticleImage(article.id, category, article.imageUrl);
 
   return (
@@ -65,6 +68,9 @@ export function NewsCard({ article, onOpenModal }: NewsCardProps) {
           src={imageUrl}
           alt={title}
           loading="lazy"
+          onError={(e) => {
+            e.currentTarget.src = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80";
+          }}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/20 to-transparent" />

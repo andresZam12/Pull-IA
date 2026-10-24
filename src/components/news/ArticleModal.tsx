@@ -5,6 +5,7 @@ import { type ArticleItem } from "@/components/news/NewsCard";
 import { useLanguage } from "@/context/LanguageContext";
 import { Category } from "@/types";
 import { getArticleImage } from "@/lib/utils/images";
+import { cleanHtmlText } from "@/lib/utils/text";
 
 interface ArticleModalProps {
   article: ArticleItem | null;
@@ -45,8 +46,10 @@ export function ArticleModal({ article, onClose }: ArticleModalProps) {
   const badgeStyle = categoryBadgeStyles[category];
   const categoryLabel = t.categories[category] || t.categories.ENGINEERING;
 
-  const title = locale === "es" ? summary.titleEs : summary.titleEn;
-  const detailedSummary = locale === "es" ? summary.summaryEs : summary.summaryEn;
+  const rawTitle = locale === "es" ? summary.titleEs : summary.titleEn;
+  const rawDetailedSummary = locale === "es" ? summary.summaryEs : summary.summaryEn;
+  const title = cleanHtmlText(rawTitle);
+  const detailedSummary = cleanHtmlText(rawDetailedSummary);
   const imageUrl = getArticleImage(article.id, category, article.imageUrl);
 
   // Calculate estimated reading time
@@ -108,6 +111,9 @@ export function ArticleModal({ article, onClose }: ArticleModalProps) {
             <img
               src={imageUrl}
               alt={title}
+              onError={(e) => {
+                e.currentTarget.src = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80";
+              }}
               className="h-full w-full object-cover transition duration-500 hover:scale-105"
             />
           </div>

@@ -101,7 +101,7 @@ export function getAllFetchers(): BaseFetcher[] {
       reputationScore: 0.87,
     }),
 
-    // ── AI Research ──────────────────────────────────────
+    // ── AI Research & Academic ──────────────────────────
     new RssFetcher({
       name: "arXiv CS.AI",
       slug: "arxiv-cs-ai",
@@ -121,6 +121,58 @@ export function getAllFetchers(): BaseFetcher[] {
       categories: [Category.ENGINEERING, Category.PROGRAMMING],
       language: "en",
       reputationScore: 0.95,
+    }),
+    new RssFetcher({
+      name: "MIT Technology Review",
+      slug: "mit-technology-review",
+      url: "https://www.technologyreview.com",
+      feedUrl: "https://www.technologyreview.com/feed/",
+      type: SourceType.RSS,
+      categories: [Category.AI, Category.EMPLOYABILITY],
+      language: "en",
+      reputationScore: 0.95,
+    }),
+
+    // ── Major Engineering & Infrastructure Blogs ─────────
+    new RssFetcher({
+      name: "GitHub Engineering",
+      slug: "github-engineering",
+      url: "https://github.blog/category/engineering/",
+      feedUrl: "https://github.blog/category/engineering/feed/",
+      type: SourceType.RSS,
+      categories: [Category.PROGRAMMING, Category.ENGINEERING],
+      language: "en",
+      reputationScore: 0.96,
+    }),
+    new RssFetcher({
+      name: "AWS News Blog",
+      slug: "aws-news-blog",
+      url: "https://aws.amazon.com/blogs/aws/",
+      feedUrl: "https://aws.amazon.com/blogs/aws/feed/",
+      type: SourceType.RSS,
+      categories: [Category.ENGINEERING],
+      language: "en",
+      reputationScore: 0.94,
+    }),
+    new RssFetcher({
+      name: "Meta Engineering",
+      slug: "meta-engineering",
+      url: "https://engineering.fb.com",
+      feedUrl: "https://engineering.fb.com/feed/",
+      type: SourceType.RSS,
+      categories: [Category.ENGINEERING, Category.AI],
+      language: "en",
+      reputationScore: 0.93,
+    }),
+    new RssFetcher({
+      name: "Microsoft Azure Blog",
+      slug: "microsoft-azure-blog",
+      url: "https://azure.microsoft.com/en-us/blog/",
+      feedUrl: "https://azure.microsoft.com/en-us/blog/feed/",
+      type: SourceType.RSS,
+      categories: [Category.ENGINEERING, Category.PROGRAMMING],
+      language: "en",
+      reputationScore: 0.93,
     }),
 
     // ── Developer Communities ────────────────────────────
