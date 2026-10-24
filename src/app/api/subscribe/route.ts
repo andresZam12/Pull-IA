@@ -66,8 +66,12 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // 5. Send double opt-in confirmation email
-  await sendConfirmationEmail(subscriber.email, subscriber.confirmToken, data.locale);
+  // 5. Send double opt-in confirmation email (defensive: never fail subscription if email provider errors)
+  try {
+    await sendConfirmationEmail(subscriber.email, subscriber.confirmToken, data.locale);
+  } catch (emailErr) {
+    console.warn("[Subscribe] Confirmation email skipped or provider error:", emailErr);
+  }
 
   return NextResponse.json(
     {

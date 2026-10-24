@@ -27,15 +27,22 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
         }
       }
 
-      // 2. Search query filter
+      // 2. Search query filter (searches titles, summaries, key points, and sources in both languages)
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const title = (locale === "es" ? article.summary?.titleEs : article.summary?.titleEn) || "";
-        const summary = (locale === "es" ? article.summary?.summaryEs : article.summary?.summaryEn) || "";
+        const query = searchQuery.toLowerCase().trim();
+        const titleEs = article.summary?.titleEs?.toLowerCase() || "";
+        const titleEn = article.summary?.titleEn?.toLowerCase() || "";
+        const summaryEs = article.summary?.summaryEs?.toLowerCase() || "";
+        const summaryEn = article.summary?.summaryEn?.toLowerCase() || "";
+        const keyPoints = (article.summary?.keyPoints || []).join(" ").toLowerCase();
         const source = article.sourceName.toLowerCase();
+
         return (
-          title.toLowerCase().includes(query) ||
-          summary.toLowerCase().includes(query) ||
+          titleEs.includes(query) ||
+          titleEn.includes(query) ||
+          summaryEs.includes(query) ||
+          summaryEn.includes(query) ||
+          keyPoints.includes(query) ||
           source.includes(query)
         );
       }

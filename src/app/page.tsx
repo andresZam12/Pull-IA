@@ -33,7 +33,7 @@ export default async function HomePage() {
       sourceName: a.source.name,
       sourceUrl: a.source.url,
       imageUrl: a.imageUrl,
-      publishedAt: a.publishedAt ?? a.fetchedAt,
+      publishedAt: (a.publishedAt ?? a.fetchedAt).toISOString(),
       summary: a.summary
         ? {
             titleEs: a.summary.titleEs,
