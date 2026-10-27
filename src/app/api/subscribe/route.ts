@@ -18,6 +18,17 @@ import { applyRateLimit } from "@/lib/security/rate-limit";
 import { parseBody, subscribeSchema } from "@/lib/security/validators";
 import { sendConfirmationEmail } from "@/lib/email/sender";
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   // 1. Rate limiting (5 attempts per IP per hour)
   const rateLimitResponse = await applyRateLimit(request, "subscribe");
@@ -78,7 +89,12 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "¡Gracias! Revisa tu correo para confirmar tu suscripción.",
     },
-    { status: 201 }
+    {
+      status: 201,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+      },
+    }
   );
 }
 

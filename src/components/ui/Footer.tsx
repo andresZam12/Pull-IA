@@ -17,7 +17,11 @@ export function Footer() {
     setMessage("");
 
     try {
-      const res = await fetch("/api/subscribe", {
+      const endpoint = process.env.NEXT_PUBLIC_BACKEND_URL
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/subscribe`
+        : "/api/subscribe";
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, locale }),

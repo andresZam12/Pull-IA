@@ -1,0 +1,114 @@
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/db/prisma";
+import { ArticleStatus, Category } from "@/types";
+
+export const dynamic = "force-dynamic";
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get("category");
+    const search = searchParams.get("search");
+    const limit = Math.min(Number(searchParams.get("limit") || 50), 100);
+
+    const whereClause: any = {
+      status: ArticleStatus.PUBLISHED,
+    };
+
+    if (category && category !== "ALL" && Object.values(Category).includes(category as Category)) {
+      whereClause.summary = {
+        category: category as Category,
+      };
+    }
+
+    const rawArticles = await prisma.article.findMany({
+      where: whereClause,
+      include: {
+        source: {
+          select: { name: true, url: true, slug: true },
+        },
+        summary: true,
+      },
+      orderBy: {
+        fetchedAt: "desc",
+      },
+      take: limit,
+    });
+
+    let articles = rawArticles.map((a) => ({
+      id: a.id,
+      url: a.url,
+      sourceName: a.source.name,
+      sourceUrl: a.source.url,
+      imageUrl: a.imageUrl,
+      publishedAt: (a.publishedAt ?? a.fetchedAt).toISOString(),
+      summary: a.summary
+        ? {
+            titleEs: a.summary.titleEs,
+            titleEn: a.summary.titleEn,
+            summaryEs: a.summary.summaryEs,
+            summaryEn: a.summary.summaryEn,
+            category: a.summary.category,
+            keyPoints: a.summary.keyPoints,
+            relevanceScore: a.summary.relevanceScore,
+            aiModel: a.summary.aiModel,
+          }
+        : null,
+    }));
+
+    // Optional search filter if provided via query param
+    if (search && search.trim()) {
+      const q = search.toLowerCase().trim();
+      articles = articles.filter((art) => {
+        const titleEs = art.summary?.titleEs.toLowerCase() || "";
+        const titleEn = art.summary?.titleEn.toLowerCase() || "";
+        const summaryEs = art.summary?.summaryEs.toLowerCase() || "";
+        const summaryEn = art.summary?.summaryEn.toLowerCase() || "";
+        return (
+          titleEs.includes(q) ||
+          titleEn.includes(q) ||
+          summaryEs.includes(q) ||
+          summaryEn.includes(q) ||
+          art.sourceName.toLowerCase().includes(q)
+        );
+      });
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        total: articles.length,
+        articles,
+      },
+      {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("[API Articles] Error fetching articles from Supabase:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to fetch articles from database" },
+      {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+  }
+}
