@@ -20,15 +20,17 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
     const search = searchParams.get("search");
-    const limit = Math.min(Number(searchParams.get("limit") || 50), 100);
+    const days = Math.min(Math.max(Number(searchParams.get("days") || 30), 1), 30);
+    const limit = Math.min(Number(searchParams.get("limit") || 100), 150);
 
-    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const whereClause: any = {
       status: ArticleStatus.PUBLISHED,
-      publishedAt: {
-        gte: oneWeekAgo,
-      },
+      OR: [
+        { publishedAt: { gte: cutoffDate } },
+        { aiModelSpec: { isNot: null } },
+      ],
     };
 
     if (category && category !== "ALL" && Object.values(Category).includes(category as Category)) {

@@ -15,7 +15,7 @@ export default async function HomePage() {
 
   if (backendUrl) {
     try {
-      const res = await fetch(`${backendUrl}/api/articles?limit=40`, {
+      const res = await fetch(`${backendUrl}/api/articles?days=30&limit=100`, {
         next: { revalidate: 60 },
       });
       if (res.ok) {
@@ -29,16 +29,17 @@ export default async function HomePage() {
     }
   }
 
-  // 2. Direct database query fallback
+  // 2. Direct database query fallback (up to 30 days retention window)
   if (articles.length === 0) {
     try {
-      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const rawArticles = await prisma.article.findMany({
         where: {
           status: ArticleStatus.PUBLISHED,
-          publishedAt: {
-            gte: oneWeekAgo,
-          },
+          OR: [
+            { publishedAt: { gte: thirtyDaysAgo } },
+            { aiModelSpec: { isNot: null } },
+          ],
         },
         include: {
           source: true,
@@ -49,7 +50,7 @@ export default async function HomePage() {
           { publishedAt: "desc" },
           { createdAt: "desc" },
         ],
-        take: 40,
+        take: 100,
       });
 
       // Transform data to match NewsCard interface

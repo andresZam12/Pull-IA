@@ -44,6 +44,14 @@ export interface TranslationSchema {
   syncUpToDate: string;
   syncSuccess: string;
   syncError: string;
+  filterRecent7d: string;
+  filterArchive30d: string;
+  loadMore: string;
+  showLess: string;
+  showingCount: string;
+  ofCount: string;
+  retentionNotice: string;
+  searchInArchiveCta: string;
   footerAcademic: string;
   footerStack: string;
 }
@@ -95,6 +103,14 @@ export const translations: Record<Locale, TranslationSchema> = {
     syncUpToDate: "Todo al día. No hay noticias nuevas en las fuentes oficiales en este momento.",
     syncSuccess: "¡Se encontraron y agregaron nuevas publicaciones!",
     syncError: "No se pudo consultar las fuentes en este momento. Intenta de nuevo más tarde.",
+    filterRecent7d: "Recientes (7 días)",
+    filterArchive30d: "Archivo del mes (30 días)",
+    loadMore: "Mostrar más noticias",
+    showLess: "Contraer vista",
+    showingCount: "Mostrando",
+    ofCount: "de",
+    retentionNotice: "Ciclo automático: archivo consultable hasta 30 días y purga automática para optimizar almacenamiento.",
+    searchInArchiveCta: "Buscar también en el archivo del mes (30 días)",
     footerAcademic: "Programación Orientada a la Web • Semestre 7",
     footerStack: "Next.js 16 • Supabase PostgreSQL • Google Gemini • Tailwind CSS",
   },
@@ -144,6 +160,14 @@ export const translations: Record<Locale, TranslationSchema> = {
     syncUpToDate: "All up to date. No new articles found in official sources right now.",
     syncSuccess: "Found and published new updates!",
     syncError: "Could not check sources at this time. Please try again later.",
+    filterRecent7d: "Recent (7 days)",
+    filterArchive30d: "Monthly archive (30 days)",
+    loadMore: "Load more articles",
+    showLess: "Show less",
+    showingCount: "Showing",
+    ofCount: "of",
+    retentionNotice: "Auto-lifecycle: searchable archive up to 30 days with automatic storage purge.",
+    searchInArchiveCta: "Search in the 30-day monthly archive as well",
     footerAcademic: "Web-Oriented Programming • Semester 7",
     footerStack: "Next.js 16 • Supabase PostgreSQL • Google Gemini • Tailwind CSS",
   },

@@ -12,11 +12,15 @@ interface NewsFeedProps {
   initialArticles: ArticleItem[];
 }
 
+const PAGE_SIZE = 12;
+
 export function NewsFeed({ initialArticles }: NewsFeedProps) {
   const { locale, t } = useLanguage();
   const [articles, setArticles] = useState<ArticleItem[]>(initialArticles);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [timeRange, setTimeRange] = useState<"7d" | "30d">("7d");
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [selectedArticle, setSelectedArticle] = useState<ArticleItem | null>(null);
 
   // Live on-demand sync state
@@ -32,6 +36,11 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
       setArticles(initialArticles);
     }
   }, [initialArticles]);
+
+  // Reset pagination batch to 12 whenever filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [selectedCategory, searchQuery, timeRange]);
 
   // Auto-dismiss feedback banner after 8 seconds
   useEffect(() => {
@@ -77,7 +86,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
 
           // Fetch fresh articles directly to render them without page reload
           try {
-            const fetchRes = await fetch(`${backendUrl}/api/articles?limit=40`);
+            const fetchRes = await fetch(`${backendUrl}/api/articles?days=30&limit=100`);
             if (fetchRes.ok) {
               const freshData = await fetchRes.json();
               if (freshData.success && Array.isArray(freshData.articles)) {
@@ -110,8 +119,13 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
     }
   }, [isSyncing, t]);
 
-  // Filter articles smoothly in memory
+  // Filter articles smoothly in memory by category, time window (7d vs 30d), and search query
   const filteredArticles = useMemo(() => {
+    const now = Date.now();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const maxAgeMs = timeRange === "7d" ? sevenDaysMs : thirtyDaysMs;
+
     return articles.filter((article) => {
       // 1. Category filter
       if (selectedCategory && selectedCategory !== "ALL") {
@@ -120,7 +134,16 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
         }
       }
 
-      // 2. Search query filter (searches titles, summaries, key points, and sources in both languages)
+      // 2. Time range filter (7d Hot Feed vs 30d Monthly Archive)
+      // Always allow AI Model Spec sheets so the Models catalog remains complete
+      if (!article.aiModelSpec) {
+        const pubTime = new Date(article.publishedAt).getTime();
+        if (!Number.isNaN(pubTime) && now - pubTime > maxAgeMs) {
+          return false;
+        }
+      }
+
+      // 3. Search query filter (searches titles, summaries, key points, and sources in both languages)
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
         const titleEs = article.summary?.titleEs?.toLowerCase() || "";
@@ -142,7 +165,12 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
 
       return true;
     });
-  }, [articles, selectedCategory, searchQuery, locale]);
+  }, [articles, selectedCategory, searchQuery, timeRange, locale]);
+
+  // Slice articles into organized batches of 12 to avoid overwhelming the screen
+  const visibleArticles = useMemo(() => {
+    return filteredArticles.slice(0, visibleCount);
+  }, [filteredArticles, visibleCount]);
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-indigo-500 selection:text-white">
@@ -171,8 +199,8 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
             {t.heroDescription}
           </p>
 
-          {/* Quick Search Input */}
-          <div className="mx-auto mt-8 max-w-md">
+          {/* Quick Search Input & Time Window Filter */}
+          <div className="mx-auto mt-8 max-w-xl space-y-3">
             <div className="relative">
               <input
                 type="text"
@@ -195,6 +223,34 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                 />
               </svg>
             </div>
+
+            {/* 7-Day Hot Feed vs 30-Day Monthly Archive Filter */}
+            <div className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-800/90 bg-zinc-900/70 p-1">
+              <button
+                type="button"
+                onClick={() => setTimeRange("7d")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  timeRange === "7d"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <span>🔥</span>
+                <span>{t.filterRecent7d}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimeRange("30d")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  timeRange === "30d"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <span>📅</span>
+                <span>{t.filterArchive30d}</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -211,7 +267,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                 : t.latestUpdates}
             </h2>
             <span className="rounded-full bg-zinc-800 px-3 py-0.5 text-xs font-bold text-zinc-300">
-              {filteredArticles.length}
+              {visibleArticles.length} / {filteredArticles.length}
             </span>
           </div>
 
@@ -291,25 +347,75 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
           </div>
         )}
 
-        {/* Visual Articles Grid */}
-        {filteredArticles.length > 0 ? (
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredArticles.map((article) =>
-              article.aiModelSpec ? (
-                <ModelSpecCard
-                  key={article.id}
-                  specs={article.aiModelSpec}
-                  articleUrl={article.url}
-                />
-              ) : (
-                <NewsCard
-                  key={article.id}
-                  article={article}
-                  onOpenModal={setSelectedArticle}
-                />
-              )
-            )}
-          </div>
+        {/* Visual Articles Grid (Capped to 12 per batch) */}
+        {visibleArticles.length > 0 ? (
+          <>
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleArticles.map((article) =>
+                article.aiModelSpec ? (
+                  <ModelSpecCard
+                    key={article.id}
+                    specs={article.aiModelSpec}
+                    articleUrl={article.url}
+                  />
+                ) : (
+                  <NewsCard
+                    key={article.id}
+                    article={article}
+                    onOpenModal={setSelectedArticle}
+                  />
+                )
+              )}
+            </div>
+
+            {/* Progressive Pagination & Monthly Retention Bar */}
+            <div className="mt-12 flex flex-col items-center justify-center gap-4 border-t border-zinc-800/80 pt-8 text-center">
+              <p className="text-xs font-medium text-zinc-400">
+                {t.showingCount}{" "}
+                <span className="font-bold text-white">{visibleArticles.length}</span>{" "}
+                {t.ofCount}{" "}
+                <span className="font-bold text-white">{filteredArticles.length}</span>{" "}
+                ({timeRange === "7d" ? t.filterRecent7d : t.filterArchive30d})
+              </p>
+
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                {visibleCount < filteredArticles.length && (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-indigo-500/40 bg-indigo-600/20 hover:bg-indigo-600/30 px-6 py-2.5 text-xs font-bold text-indigo-200 transition shadow-sm"
+                  >
+                    <span>{t.loadMore} (+{Math.min(PAGE_SIZE, filteredArticles.length - visibleCount)})</span>
+                  </button>
+                )}
+
+                {visibleCount > PAGE_SIZE && (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount(PAGE_SIZE)}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 px-5 py-2.5 text-xs font-semibold text-zinc-300 transition"
+                  >
+                    <span>{t.showLess}</span>
+                  </button>
+                )}
+
+                {timeRange === "7d" && (
+                  <button
+                    type="button"
+                    onClick={() => setTimeRange("30d")}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/80 hover:border-indigo-500/40 hover:text-indigo-300 px-5 py-2.5 text-xs font-semibold text-zinc-400 transition"
+                  >
+                    <span>📅</span>
+                    <span>{t.searchInArchiveCta}</span>
+                  </button>
+                )}
+              </div>
+
+              <p className="text-[11px] text-zinc-500">
+                {t.retentionNotice}
+              </p>
+            </div>
+          </>
         ) : (
           <div className="rounded-3xl border border-dashed border-zinc-800 py-20 text-center">
             <svg
@@ -331,6 +437,16 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
             <p className="mt-1 text-xs text-zinc-500">
               {t.noArticlesDesc}
             </p>
+            {timeRange === "7d" && (
+              <button
+                type="button"
+                onClick={() => setTimeRange("30d")}
+                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 px-4 py-2 text-xs font-semibold text-indigo-300 transition"
+              >
+                <span>📅</span>
+                <span>{t.searchInArchiveCta}</span>
+              </button>
+            )}
           </div>
         )}
       </main>

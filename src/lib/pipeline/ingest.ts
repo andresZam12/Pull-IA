@@ -71,8 +71,8 @@ export class IngestionPipeline {
       }
     }
 
-    // Step 6: Automatically archive articles older than 7 days to keep feed fresh
-    await this.archiveOldArticles();
+    // Step 6: Manage 30-day retention lifecycle and purge expired/excess articles to free DB space
+    await this.manageRetentionAndPurge();
 
     const duration = Date.now() - startTime;
     console.log(`[Pipeline] Done in ${duration}ms — published: ${published}, rejected: ${rejected}`);
@@ -177,7 +177,7 @@ export class IngestionPipeline {
     if (!classification || !classification.isRelevant) {
       await prisma.article.update({
         where: { id: saved.id },
-        data: { status: ArticleStatus.REJECTED },
+        data: { status: ArticleStatus.REJECTED, rawContent: "" },
       });
       return;
     }
@@ -192,7 +192,7 @@ export class IngestionPipeline {
       source.reputationScore * FINAL_SCORE_WEIGHTS.reputation +
       freshness * FINAL_SCORE_WEIGHTS.freshness;
 
-    // Save summary and mark as published
+    // Save summary and mark as published (compact rawContent to save DB storage)
     await prisma.$transaction([
       prisma.articleSummary.create({
         data: {
@@ -211,7 +211,10 @@ export class IngestionPipeline {
       }),
       prisma.article.update({
         where: { id: saved.id },
-        data: { status: ArticleStatus.PUBLISHED },
+        data: {
+          status: ArticleStatus.PUBLISHED,
+          rawContent: article.rawContent.slice(0, 300),
+        },
       }),
     ]);
   }
@@ -238,20 +241,72 @@ export class IngestionPipeline {
     return 0.25;
   }
 
-  private async archiveOldArticles(): Promise<number> {
+  /**
+   * 3-Tier Retention & Storage Optimization:
+   * - Keep published articles up to 30 days (7d Hot Feed + 30d Monthly Searchable Archive).
+   * - Hard-delete articles older than 30 days (cascade deletes summaries to free disk space).
+   * - Hard-delete rejected/stale articles older than 7 days.
+   * - Enforce a maximum cap of 150 stored articles (preserving AI Model Spec sheets).
+   */
+  private async manageRetentionAndPurge(): Promise<number> {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const result = await prisma.article.updateMany({
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const MAX_STORED_ARTICLES = 150;
+
+    // 1. Restore any summarized articles within the 30-day window that were previously hidden
+    await prisma.article.updateMany({
       where: {
-        publishedAt: { lt: sevenDaysAgo },
-        status: ArticleStatus.PUBLISHED,
+        status: ArticleStatus.REJECTED,
+        summary: { isNot: null },
+        publishedAt: { gte: thirtyDaysAgo },
       },
       data: {
-        status: ArticleStatus.REJECTED,
+        status: ArticleStatus.PUBLISHED,
       },
     });
-    if (result.count > 0) {
-      console.log(`[Pipeline] Archived ${result.count} articles older than 7 days`);
+
+    // 2. Hard-delete articles older than 30 days (except AI Model Spec cards)
+    const expiredDeleted = await prisma.article.deleteMany({
+      where: {
+        publishedAt: { lt: thirtyDaysAgo },
+        aiModelSpec: { is: null },
+      },
+    });
+
+    // 3. Hard-delete rejected or stuck processing articles older than 7 days
+    const rejectedDeleted = await prisma.article.deleteMany({
+      where: {
+        status: { in: [ArticleStatus.REJECTED, ArticleStatus.PROCESSING] },
+        fetchedAt: { lt: sevenDaysAgo },
+        aiModelSpec: { is: null },
+      },
+    });
+
+    // 4. Enforce maximum capacity cap (keep newest 150 articles, purge oldest excess)
+    let excessDeletedCount = 0;
+    const overflowArticles = await prisma.article.findMany({
+      where: {
+        status: ArticleStatus.PUBLISHED,
+        aiModelSpec: { is: null },
+      },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      skip: MAX_STORED_ARTICLES,
+      select: { id: true },
+    });
+
+    if (overflowArticles.length > 0) {
+      const overflowRes = await prisma.article.deleteMany({
+        where: { id: { in: overflowArticles.map((a) => a.id) } },
+      });
+      excessDeletedCount = overflowRes.count;
     }
-    return result.count;
+
+    const totalPurged = expiredDeleted.count + rejectedDeleted.count + excessDeletedCount;
+    if (totalPurged > 0) {
+      console.log(
+        `[Pipeline] Purged ${totalPurged} articles from DB (expired >30d: ${expiredDeleted.count}, old rejected: ${rejectedDeleted.count}, overflow >${MAX_STORED_ARTICLES}: ${excessDeletedCount})`
+      );
+    }
+    return totalPurged;
   }
 }
