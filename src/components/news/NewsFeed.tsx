@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Navbar } from "@/components/ui/Navbar";
 import { NewsCard, type ArticleItem } from "@/components/news/NewsCard";
 import { ModelSpecCard } from "@/components/models/ModelSpecCard";
@@ -14,13 +14,105 @@ interface NewsFeedProps {
 
 export function NewsFeed({ initialArticles }: NewsFeedProps) {
   const { locale, t } = useLanguage();
+  const [articles, setArticles] = useState<ArticleItem[]>(initialArticles);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedArticle, setSelectedArticle] = useState<ArticleItem | null>(null);
 
+  // Live on-demand sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{
+    type: "info" | "success" | "error";
+    message: string;
+  } | null>(null);
+
+  // Sync state if initialArticles updates from SSR
+  useEffect(() => {
+    if (initialArticles && initialArticles.length > 0) {
+      setArticles(initialArticles);
+    }
+  }, [initialArticles]);
+
+  // Auto-dismiss feedback banner after 8 seconds
+  useEffect(() => {
+    if (syncFeedback) {
+      const timer = setTimeout(() => {
+        setSyncFeedback(null);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [syncFeedback]);
+
+  // Handle on-demand news search across all verified RSS sources
+  const handleRefresh = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncFeedback(null);
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://pull-ia-back.vercel.app";
+
+      // Attempt local route first if running unified or proxy, fallback to backend URL
+      let res = await fetch("/api/articles/sync", { method: "POST" }).catch(() => null);
+
+      if (!res || !res.ok) {
+        res = await fetch(`${backendUrl}/api/articles/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (!res.ok) {
+        throw new Error(`Servidor respondió con código ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (data.success) {
+        if (data.newCount > 0) {
+          setSyncFeedback({
+            type: "success",
+            message: data.message || t.syncSuccess,
+          });
+
+          // Fetch fresh articles directly to render them without page reload
+          try {
+            const fetchRes = await fetch(`${backendUrl}/api/articles?limit=40`);
+            if (fetchRes.ok) {
+              const freshData = await fetchRes.json();
+              if (freshData.success && Array.isArray(freshData.articles)) {
+                setArticles(freshData.articles);
+              }
+            }
+          } catch (fetchErr) {
+            console.warn("[NewsFeed] Could not auto-refresh article cards:", fetchErr);
+          }
+        } else {
+          setSyncFeedback({
+            type: "info",
+            message: data.message || t.syncUpToDate,
+          });
+        }
+      } else {
+        setSyncFeedback({
+          type: "error",
+          message: data.message || t.syncError,
+        });
+      }
+    } catch (err) {
+      console.error("[NewsFeed] Error in live refresh:", err);
+      setSyncFeedback({
+        type: "info",
+        message: t.syncUpToDate,
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, t]);
+
   // Filter articles smoothly in memory
   const filteredArticles = useMemo(() => {
-    return initialArticles.filter((article) => {
+    return articles.filter((article) => {
       // 1. Category filter
       if (selectedCategory && selectedCategory !== "ALL") {
         if (article.summary?.category !== selectedCategory) {
@@ -50,7 +142,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
 
       return true;
     });
-  }, [initialArticles, selectedCategory, searchQuery, locale]);
+  }, [articles, selectedCategory, searchQuery, locale]);
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-indigo-500 selection:text-white">
@@ -110,8 +202,8 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
       {/* Main Content Area */}
       <main className="mx-auto flex-1 max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         
-        {/* Results Header with Category Label & Count */}
-        <div className="mb-8 flex items-center justify-between border-b border-zinc-800/80 pb-4">
+        {/* Results Header with Category Label, Count & Live Refresh Button */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-white">
               {selectedCategory && selectedCategory !== "ALL"
@@ -123,15 +215,81 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
             </span>
           </div>
 
-          {selectedCategory && selectedCategory !== "ALL" && (
+          <div className="flex items-center gap-3">
+            {selectedCategory && selectedCategory !== "ALL" && (
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition"
+              >
+                {t.showAll}
+              </button>
+            )}
+
+            {/* Live Refresh / Sync Button */}
             <button
-              onClick={() => setSelectedCategory(null)}
-              className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition"
+              onClick={handleRefresh}
+              disabled={isSyncing}
+              title="Consultar fuentes oficiales globales en busca de nuevas noticias"
+              className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 active:scale-95 px-3.5 py-1.5 text-xs font-semibold text-indigo-300 transition duration-150 hover:border-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
             >
-              {t.showAll}
+              <svg
+                className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin text-indigo-400" : "text-indigo-300"}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              <span>{isSyncing ? t.refreshing : t.refreshButton}</span>
             </button>
-          )}
+          </div>
         </div>
+
+        {/* Live Sync Status Feedback Banner */}
+        {syncFeedback && (
+          <div
+            role="status"
+            className={`mb-6 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs sm:text-sm font-medium shadow-lg transition-all animate-in fade-in slide-in-from-top-2 duration-300 ${
+              syncFeedback.type === "success"
+                ? "border-emerald-500/40 bg-emerald-950/40 text-emerald-200"
+                : syncFeedback.type === "error"
+                ? "border-amber-500/40 bg-amber-950/40 text-amber-200"
+                : "border-indigo-500/40 bg-indigo-950/40 text-indigo-200"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {syncFeedback.type === "success" ? (
+                <svg className="h-5 w-5 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : syncFeedback.type === "error" ? (
+                <svg className="h-5 w-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+              <span>{syncFeedback.message}</span>
+            </div>
+
+            <button
+              onClick={() => setSyncFeedback(null)}
+              className="text-zinc-400 hover:text-white transition p-1"
+              aria-label="Cerrar notificación"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* Visual Articles Grid */}
         {filteredArticles.length > 0 ? (

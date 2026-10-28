@@ -39,6 +39,11 @@ export interface TranslationSchema {
     error: string;
     disclaimer: string;
   };
+  refreshButton: string;
+  refreshing: string;
+  syncUpToDate: string;
+  syncSuccess: string;
+  syncError: string;
   footerAcademic: string;
   footerStack: string;
 }
@@ -85,6 +90,11 @@ export const translations: Record<Locale, TranslationSchema> = {
       error: "Hubo un error al suscribirte.",
       disclaimer: "Doble confirmación (Double opt-in). Puedes cancelar tu suscripción en cualquier momento.",
     },
+    refreshButton: "Actualizar novedades",
+    refreshing: "Consultando fuentes...",
+    syncUpToDate: "Todo al día. No hay noticias nuevas en las fuentes oficiales en este momento.",
+    syncSuccess: "¡Se encontraron y agregaron nuevas publicaciones!",
+    syncError: "No se pudo consultar las fuentes en este momento. Intenta de nuevo más tarde.",
     footerAcademic: "Programación Orientada a la Web • Semestre 7",
     footerStack: "Next.js 16 • Supabase PostgreSQL • Google Gemini • Tailwind CSS",
   },
@@ -129,6 +139,11 @@ export const translations: Record<Locale, TranslationSchema> = {
       error: "Failed to subscribe.",
       disclaimer: "Double opt-in. You can unsubscribe at any time with one click.",
     },
+    refreshButton: "Refresh news",
+    refreshing: "Checking sources...",
+    syncUpToDate: "All up to date. No new articles found in official sources right now.",
+    syncSuccess: "Found and published new updates!",
+    syncError: "Could not check sources at this time. Please try again later.",
     footerAcademic: "Web-Oriented Programming • Semester 7",
     footerStack: "Next.js 16 • Supabase PostgreSQL • Google Gemini • Tailwind CSS",
   },
