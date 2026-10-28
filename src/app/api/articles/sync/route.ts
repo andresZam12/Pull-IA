@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
     console.log("[Sync] User triggered manual news sync at", new Date().toISOString());
 
     const pipeline = new IngestionPipeline();
-    // Process up to 2 fresh articles quickly so it completes well within HTTP limits
-    const result = await pipeline.run(2);
+    // Process fresh articles quickly so it completes well within HTTP limits
+    const result = await pipeline.run();
 
     const newCount = result.published;
 
