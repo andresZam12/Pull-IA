@@ -30,9 +30,10 @@ export class RssFetcher extends BaseFetcher {
     const response = await fetch(feedUrl, {
       headers: {
         "User-Agent":
-          "PULL-IA/1.0 (+https://pull-ia.com; Tech news aggregator)",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PULL-IA/1.0 (+https://pull-ia.com; Tech news aggregator)",
         Accept: "application/rss+xml, application/xml, text/xml",
       },
+      signal: AbortSignal.timeout(6000),
       next: { revalidate: 0 }, // always fresh
     });
 

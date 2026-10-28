@@ -10,7 +10,7 @@ import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import type { ClassificationResult, RawArticle } from "@/types";
 import { Category } from "@/types";
 
-const MODEL = "gemini-3.8-flash";
+const MODEL = "gemini-flash-latest";
 const RELEVANCE_THRESHOLD = 0.4; // articles below this are rejected
 
 // JSON schema for structured output
@@ -76,11 +76,21 @@ export class ArticleClassifier {
       return parsed;
     } catch (error) {
       console.warn(`[Classifier] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using heuristic fallback.`);
+      const text = `${article.title} ${article.rawContent ?? ""}`.toLowerCase();
+      let category = Category.ENGINEERING;
+      if (text.includes("agent") || text.includes("ai") || text.includes("llm") || text.includes("model") || text.includes("openai") || text.includes("anthropic")) {
+        category = Category.AI;
+      } else if (text.includes("stock") || text.includes("market") || text.includes("earning") || text.includes("nasdaq") || text.includes("salary") || text.includes("career") || text.includes("layoff")) {
+        category = Category.EMPLOYABILITY;
+      } else if (text.includes("php") || text.includes("python") || text.includes("rust") || text.includes("typescript") || text.includes("code") || text.includes("library")) {
+        category = Category.PROGRAMMING;
+      }
+
       return {
-        category: Category.AI,
-        relevanceScore: 0.85,
+        category,
+        relevanceScore: 0.88,
         keyPoints: [article.title],
-        tags: ["tech", "engineering", "ai"],
+        tags: ["tech", category.toLowerCase(), "breaking"],
         isRelevant: true,
       };
     }
@@ -131,13 +141,13 @@ SOURCE: ${article.sourceName}
 CONTENT: ${article.rawContent ?? "(no content available)"}
 
 CATEGORIES:
-- AI: artificial intelligence, machine learning, LLMs, neural networks, AI tools, AI research
-- ENGINEERING: software architecture, DevOps, cloud, infrastructure, system design, APIs
-- PROGRAMMING: programming languages, frameworks, libraries, coding practices, tutorials
-- EMPLOYABILITY: tech jobs, salaries, career advice, remote work, tech industry trends, layoffs
+- AI: artificial intelligence, autonomous agents, multi-agent frameworks, LLMs, neural networks, foundation models (OpenAI, Anthropic, Google, Meta, Hugging Face)
+- ENGINEERING: cybersecurity, zero-day vulnerabilities, exploits (PHP, Linux, CVEs), software architecture, DevOps, cloud, infrastructure, system design, APIs, security patches
+- PROGRAMMING: programming languages (PHP, Python, Rust, Go, TypeScript), frameworks, libraries, coding practices, tutorials, developer tools
+- EMPLOYABILITY: tech stock market & Wall Street movements (NVIDIA, Microsoft, Apple, Alphabet, Meta, SaaS), tech finance, earnings, salaries, tech industry trends, layoffs, career
 
 SCORING GUIDE:
-- 0.9-1.0: Breaking news, major releases, landmark research from top companies (OpenAI, Google, etc.)
+- 0.9-1.0: Breaking news, critical security zero-days, frontier AI agents, major stock/earnings movements from top companies
 - 0.7-0.9: Important updates, useful tools, significant industry developments
 - 0.5-0.7: Interesting but not urgent: opinion pieces, case studies, tutorials
 - 0.3-0.5: Low relevance: too niche, outdated, or tangentially related

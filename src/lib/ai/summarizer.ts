@@ -10,7 +10,7 @@ import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import type { SummaryResult, RawArticle } from "@/types";
 import { cleanHtmlText } from "@/lib/utils/text";
 
-const MODEL = "gemini-3.8-flash";
+const MODEL = "gemini-flash-latest";
 
 const summarySchema: Schema = {
   type: SchemaType.OBJECT,

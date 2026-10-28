@@ -34,7 +34,7 @@ export class IngestionPipeline {
    * Run the full ingestion pipeline.
    * Returns a summary of what happened.
    */
-  async run(): Promise<PipelineResult> {
+  async run(maxBatch = 3): Promise<PipelineResult> {
     const startTime = Date.now();
     console.log("[Pipeline] Starting ingestion run...");
 
@@ -49,8 +49,8 @@ export class IngestionPipeline {
     let published = 0;
     let rejected = 0;
 
-    // Process in small batches of 5 articles with delay to respect Gemini free-tier rate limits (15 RPM)
-    const batch = newArticles.slice(0, 5);
+    // Process in batches
+    const batch = newArticles.slice(0, maxBatch);
     console.log(`[Pipeline] Processing batch of ${batch.length} articles...`);
 
     // Step 3-5: Process each article in the batch

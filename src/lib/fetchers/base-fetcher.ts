@@ -45,11 +45,11 @@ export abstract class BaseFetcher {
    */
   async safeFetch(): Promise<RawArticle[]> {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15_000); // 15s timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Timeout (6s exceeded)")), 6000);
+      });
 
-      const articles = await this.fetch();
-      clearTimeout(timeoutId);
+      const articles = await Promise.race([this.fetch(), timeoutPromise]);
 
       console.log(
         `[${this.config.name}] Fetched ${articles.length} articles successfully`
@@ -57,7 +57,7 @@ export abstract class BaseFetcher {
       return articles;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[${this.config.name}] Fetch failed: ${message}`);
+      console.warn(`[${this.config.name}] Fetch skipped: ${message}`);
       return [];
     }
   }
