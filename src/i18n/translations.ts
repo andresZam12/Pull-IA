@@ -12,6 +12,7 @@ export interface TranslationSchema {
     AI: string;
     ENGINEERING: string;
     PROGRAMMING: string;
+    MODELS: string;
     EMPLOYABILITY: string;
   };
   latestUpdates: string;
@@ -56,6 +57,7 @@ export const translations: Record<Locale, TranslationSchema> = {
       AI: "Inteligencia Artificial",
       ENGINEERING: "Ingeniería",
       PROGRAMMING: "Programación",
+      MODELS: "Modelos",
       EMPLOYABILITY: "Empleabilidad",
     },
     latestUpdates: "Últimas publicaciones",
@@ -99,6 +101,7 @@ export const translations: Record<Locale, TranslationSchema> = {
       AI: "Artificial Intelligence",
       ENGINEERING: "Engineering",
       PROGRAMMING: "Programming",
+      MODELS: "Models",
       EMPLOYABILITY: "Careers",
     },
     latestUpdates: "Latest updates",

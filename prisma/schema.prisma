@@ -112,6 +112,7 @@ model Article {
   sourceId    String
   source      Source         @relation(fields: [sourceId], references: [id])
   summary     ArticleSummary?
+  aiModelSpec AiModel?
   tags        ArticleTag[]
   clusterId   String?
   cluster     ArticleCluster? @relation(fields: [clusterId], references: [id])
@@ -243,6 +244,35 @@ model NewsletterSend {
 }
 
 // ─────────────────────────────────────────────
+// AI MODELS (Technical Spec Sheets)
+// ─────────────────────────────────────────────
+
+model AiModel {
+  id                         String    @id @default(cuid())
+  name                       String    @unique
+  slug                       String    @unique
+  provider                   String    // Anthropic, OpenAI, Meta, Google, etc.
+  licenseType                String    @default("Proprietary")
+  contextWindowTokens        Int       @default(128000)
+  avgLatencyMs               Float?
+  costInputPerM              Float     @default(0.0)
+  costOutputPerM             Float     @default(0.0)
+  mmluScore                  Float?
+  tokensPerSecond            Float?
+  technicalAdvantages        String[]  @default([])
+  criticalLimitations        String[]  @default([])
+  idealArchitecturalUsecases String[]  @default([])
+  articleId                  String?   @unique
+  article                    Article?  @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@index([provider])
+  @@index([slug])
+  @@map("ai_models")
+}
+
+// ─────────────────────────────────────────────
 // ENUMS
 // ─────────────────────────────────────────────
 
@@ -261,6 +291,7 @@ enum Category {
   AI
   ENGINEERING
   PROGRAMMING
+  MODELS
   EMPLOYABILITY
 }
 

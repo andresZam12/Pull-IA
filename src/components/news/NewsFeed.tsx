@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Navbar } from "@/components/ui/Navbar";
 import { NewsCard, type ArticleItem } from "@/components/news/NewsCard";
+import { ModelSpecCard } from "@/components/models/ModelSpecCard";
 import { ArticleModal } from "@/components/news/ArticleModal";
 import { Footer } from "@/components/ui/Footer";
 import { useLanguage } from "@/context/LanguageContext";
@@ -135,13 +136,21 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
         {/* Visual Articles Grid */}
         {filteredArticles.length > 0 ? (
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredArticles.map((article) => (
-              <NewsCard
-                key={article.id}
-                article={article}
-                onOpenModal={setSelectedArticle}
-              />
-            ))}
+            {filteredArticles.map((article) =>
+              article.aiModelSpec ? (
+                <ModelSpecCard
+                  key={article.id}
+                  specs={article.aiModelSpec}
+                  articleUrl={article.url}
+                />
+              ) : (
+                <NewsCard
+                  key={article.id}
+                  article={article}
+                  onOpenModal={setSelectedArticle}
+                />
+              )
+            )}
           </div>
         ) : (
           <div className="rounded-3xl border border-dashed border-zinc-800 py-20 text-center">

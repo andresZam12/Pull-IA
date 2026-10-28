@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
           select: { name: true, url: true, slug: true },
         },
         summary: true,
+        aiModelSpec: true,
       },
       orderBy: [
         { publishedAt: "desc" },
@@ -69,6 +70,22 @@ export async function GET(request: NextRequest) {
             keyPoints: a.summary.keyPoints,
             relevanceScore: a.summary.relevanceScore,
             aiModel: a.summary.aiModel,
+          }
+        : null,
+      aiModelSpec: a.aiModelSpec
+        ? {
+            modelName: a.aiModelSpec.name,
+            provider: a.aiModelSpec.provider,
+            licenseType: a.aiModelSpec.licenseType,
+            contextWindowTokens: a.aiModelSpec.contextWindowTokens,
+            avgLatencyMs: a.aiModelSpec.avgLatencyMs || undefined,
+            costInputPerM: a.aiModelSpec.costInputPerM,
+            costOutputPerM: a.aiModelSpec.costOutputPerM,
+            mmluScore: a.aiModelSpec.mmluScore || undefined,
+            tokensPerSecond: a.aiModelSpec.tokensPerSecond || undefined,
+            technicalAdvantages: a.aiModelSpec.technicalAdvantages,
+            criticalLimitations: a.aiModelSpec.criticalLimitations,
+            idealArchitecturalUsecases: a.aiModelSpec.idealArchitecturalUsecases,
           }
         : null,
     }));

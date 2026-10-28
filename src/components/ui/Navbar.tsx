@@ -21,7 +21,7 @@ export function Navbar({
     { id: "ALL", label: t.categories.ALL },
     { id: Category.AI, label: t.categories[Category.AI] },
     { id: Category.ENGINEERING, label: t.categories[Category.ENGINEERING] },
-    { id: Category.PROGRAMMING, label: t.categories[Category.PROGRAMMING] },
+    { id: Category.MODELS, label: t.categories[Category.MODELS] },
     { id: Category.EMPLOYABILITY, label: t.categories[Category.EMPLOYABILITY] },
   ];
 

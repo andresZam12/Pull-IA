@@ -16,6 +16,7 @@ const categoryBadgeStyles: Record<Category, { bg: string; text: string }> = {
   [Category.AI]: { bg: "bg-purple-500/20 border-purple-500/40 text-purple-300", text: "text-purple-400" },
   [Category.ENGINEERING]: { bg: "bg-blue-500/20 border-blue-500/40 text-blue-300", text: "text-blue-400" },
   [Category.PROGRAMMING]: { bg: "bg-emerald-500/20 border-emerald-500/40 text-emerald-300", text: "text-emerald-400" },
+  [Category.MODELS]: { bg: "bg-emerald-500/20 border-emerald-500/40 text-emerald-300", text: "text-emerald-400" },
   [Category.EMPLOYABILITY]: { bg: "bg-amber-500/20 border-amber-500/40 text-amber-300", text: "text-amber-400" },
 };
 
