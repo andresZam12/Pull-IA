@@ -71,6 +71,9 @@ export class IngestionPipeline {
       }
     }
 
+    // Step 6: Automatically archive articles older than 7 days to keep feed fresh
+    await this.archiveOldArticles();
+
     const duration = Date.now() - startTime;
     console.log(`[Pipeline] Done in ${duration}ms — published: ${published}, rejected: ${rejected}`);
 
@@ -233,5 +236,22 @@ export class IngestionPipeline {
     if (ageHours < 24) return 0.75;
     if (ageHours < 48) return 0.5;
     return 0.25;
+  }
+
+  private async archiveOldArticles(): Promise<number> {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const result = await prisma.article.updateMany({
+      where: {
+        publishedAt: { lt: sevenDaysAgo },
+        status: ArticleStatus.PUBLISHED,
+      },
+      data: {
+        status: ArticleStatus.REJECTED,
+      },
+    });
+    if (result.count > 0) {
+      console.log(`[Pipeline] Archived ${result.count} articles older than 7 days`);
+    }
+    return result.count;
   }
 }

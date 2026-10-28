@@ -22,8 +22,13 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search");
     const limit = Math.min(Number(searchParams.get("limit") || 50), 100);
 
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
     const whereClause: any = {
       status: ArticleStatus.PUBLISHED,
+      publishedAt: {
+        gte: oneWeekAgo,
+      },
     };
 
     if (category && category !== "ALL" && Object.values(Category).includes(category as Category)) {
@@ -40,9 +45,10 @@ export async function GET(request: NextRequest) {
         },
         summary: true,
       },
-      orderBy: {
-        fetchedAt: "desc",
-      },
+      orderBy: [
+        { publishedAt: "desc" },
+        { createdAt: "desc" },
+      ],
       take: limit,
     });
 

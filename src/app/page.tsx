@@ -32,18 +32,22 @@ export default async function HomePage() {
   // 2. Direct database query fallback
   if (articles.length === 0) {
     try {
-      // Fetch published articles with their AI summaries and sources
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const rawArticles = await prisma.article.findMany({
         where: {
           status: ArticleStatus.PUBLISHED,
+          publishedAt: {
+            gte: oneWeekAgo,
+          },
         },
         include: {
           source: true,
           summary: true,
         },
-        orderBy: {
-          fetchedAt: "desc",
-        },
+        orderBy: [
+          { publishedAt: "desc" },
+          { createdAt: "desc" },
+        ],
         take: 40,
       });
 

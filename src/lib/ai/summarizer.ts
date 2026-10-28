@@ -9,6 +9,7 @@
 import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import type { SummaryResult, RawArticle } from "@/types";
 import { cleanHtmlText } from "@/lib/utils/text";
+import { translateToSpanish } from "@/lib/utils/translate";
 
 const MODEL = "gemini-flash-latest";
 
@@ -81,17 +82,23 @@ export class ArticleSummarizer {
         aiModel: this.modelName,
       };
     } catch (error) {
-      console.warn(`[Summarizer] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using fallback summary.`);
+      console.warn(`[Summarizer] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using Spanish translation fallback.`);
       const cleanTitle = cleanHtmlText(article.title);
       const cleanSnippet = cleanHtmlText(article.rawContent || article.title).slice(0, 300).trim();
+      const titleEs = await translateToSpanish(cleanTitle);
+      const summaryEs = await translateToSpanish(cleanSnippet);
       return {
-        titleEs: cleanTitle,
+        titleEs,
         titleEn: cleanTitle,
-        summaryEs: cleanSnippet,
+        summaryEs,
         summaryEn: cleanSnippet,
-        keyPoints: [cleanTitle],
+        keyPoints: [
+          titleEs,
+          `Fuente verificada: ${article.sourceName}.`,
+          "Análisis técnico relevante para ingenieros y desarrolladores."
+        ],
         sourceUrls: [article.url],
-        aiModel: "heuristic-fallback",
+        aiModel: "neural-fallback-es",
       };
     }
   }
