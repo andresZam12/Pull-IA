@@ -150,28 +150,41 @@ export function ArticleModal({ article, onClose }: ArticleModalProps) {
           </h2>
 
           {/* Structured Detailed Summary */}
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5 sm:p-6">
-            <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-400">
-              {t.fullSummaryTitle}
-            </h4>
-            <p className="text-sm sm:text-base leading-relaxed text-zinc-200">
-              {detailedSummary}
-            </p>
+          <div className="rounded-2xl border border-zinc-800/90 bg-zinc-950/70 p-6 sm:p-7 shadow-inner">
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-400">
+                <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                {t.fullSummaryTitle}
+              </h4>
+              <span className="text-[11px] font-medium text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-full">
+                Análisis Ejecutivo
+              </span>
+            </div>
+            <div className="space-y-3.5 text-sm sm:text-base leading-relaxed text-zinc-200">
+              {detailedSummary.split(/\n+/).filter(Boolean).map((para, idx) => (
+                <p key={idx} className="leading-relaxed text-zinc-200/95">
+                  {para.trim()}
+                </p>
+              ))}
+            </div>
           </div>
 
           {/* Key Points / Bullets */}
           {summary.keyPoints && summary.keyPoints.length > 0 && (
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-5 sm:p-6">
-              <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-violet-400">
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-6 sm:p-7">
+              <h4 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-400">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
                 {t.keyPointsTitle}
               </h4>
-              <ul className="space-y-2.5 text-sm text-zinc-300">
+              <ul className="space-y-3 text-sm text-zinc-300">
                 {summary.keyPoints.map((point, index) => (
-                  <li key={index} className="flex items-start gap-2.5">
-                    <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-500/20 text-xs font-bold text-violet-300">
-                      ✓
+                  <li key={index} className="flex items-start gap-3 rounded-xl bg-zinc-950/50 border border-zinc-800/60 p-3.5">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 text-xs font-bold text-violet-300">
+                      {index + 1}
                     </span>
-                    <span className="leading-relaxed">{point}</span>
+                    <span className="leading-relaxed text-zinc-200">{point}</span>
                   </li>
                 ))}
               </ul>

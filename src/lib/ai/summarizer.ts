@@ -26,16 +26,16 @@ const summarySchema: Schema = {
     },
     summaryEs: {
       type: SchemaType.STRING,
-      description: "2-3 sentence summary in Spanish, factual and neutral",
+      description: "Comprehensive, structured executive summary in Spanish (2-4 well-developed paragraphs separated by newlines). Covers context, technical breakdown, and developer impact.",
     },
     summaryEn: {
       type: SchemaType.STRING,
-      description: "2-3 sentence summary in English, factual and neutral",
+      description: "Comprehensive, structured executive summary in English (2-4 well-developed paragraphs separated by newlines). Covers context, technical breakdown, and developer impact.",
     },
     keyPoints: {
       type: SchemaType.ARRAY,
       items: { type: SchemaType.STRING },
-      description: "3 to 5 key takeaways from the article, in Spanish",
+      description: "4 to 6 specific, actionable takeaways with technical data, versions, and metrics, in Spanish",
     },
     sourceUrls: {
       type: SchemaType.ARRAY,
@@ -58,7 +58,7 @@ export class ArticleSummarizer {
         responseMimeType: "application/json",
         responseSchema: summarySchema,
         temperature: 0.3,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       },
     });
   }
@@ -104,24 +104,29 @@ export class ArticleSummarizer {
   }
 
   private buildPrompt(article: RawArticle): string {
-    return `You are a bilingual tech journalist writing for PULL-IA, a tech news platform.
+    return `You are a principal tech analyst and journalist writing executive summaries for PULL-IA.
+Our audience consists of software engineers, tech leads, and tech executives.
 
-Your task: summarize the following article in both Spanish and English.
+Your task: Provide a comprehensive, high-value, and well-structured summary of the article in both Spanish and English.
+The summary MUST be thorough enough that the reader understands all vital technical details without needing to read the original long article.
+
+STRUCTURE REQUIREMENTS FOR THE SUMMARY (2-3 substantive paragraphs separated by newlines):
+1. Context & Event: Detail exactly what occurred, companies, actors, and products/services involved.
+2. Technical Mechanics & Scope: Explain how it works, vulnerabilities exploited, technical architecture, features, benchmarks, or models.
+3. Industry Impact & Practical Takeaway: Explain the ramifications for developers, engineering teams, security posture, or the software market.
 
 STRICT RULES:
-1. Only use information present in the SOURCE TEXT below — do NOT add external knowledge
-2. Be factual and neutral — no opinions or marketing language
-3. Summaries must be 2-3 sentences maximum
-4. Key points must be concrete facts from the article, not vague statements
-5. Source URLs: extract any URLs actually mentioned in the content
+1. Always be fact-based and technically precise — never use marketing fluff or vague claims.
+2. Provide 4 to 6 concrete, actionable bullet points in Spanish (keyPoints) capturing metrics, CVEs, versions, or core decisions.
+3. Both summaryEs and titleEs MUST be natural, professional Spanish.
 
 SOURCE TEXT:
 Title: ${article.title}
 URL: ${article.url}
 Author: ${article.author ?? "Unknown"}
 Source: ${article.sourceName}
-Content: ${article.rawContent ?? "(no content — summarize from title only)"}
+Content: ${article.rawContent ?? "(no content — summarize from title and known context)"}
 
-Return a JSON object with titleEs, titleEn, summaryEs, summaryEn, keyPoints (in Spanish), and sourceUrls.`;
+Return a JSON object matching the requested schema.`;
   }
 }
