@@ -136,7 +136,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
 
       // 2. Time range filter (7d Hot Feed vs 30d Monthly Archive)
       // Always allow AI Model Spec sheets so the Models catalog remains complete
-      if (!article.aiModelSpec) {
+      if (!article.aiModelSpec && article.publishedAt) {
         const pubTime = new Date(article.publishedAt).getTime();
         if (!Number.isNaN(pubTime) && now - pubTime > maxAgeMs) {
           return false;

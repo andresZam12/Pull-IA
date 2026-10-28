@@ -213,7 +213,7 @@ export class IngestionPipeline {
         where: { id: saved.id },
         data: {
           status: ArticleStatus.PUBLISHED,
-          rawContent: article.rawContent.slice(0, 300),
+          rawContent: (article.rawContent ?? "").slice(0, 300),
         },
       }),
     ]);
