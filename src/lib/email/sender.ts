@@ -16,7 +16,7 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 const gmailUser = process.env.GMAIL_USER?.trim();
-const gmailPass = process.env.GMAIL_APP_PASSWORD?.trim();
+const gmailPass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "");
 
 const smtpTransporter =
   gmailUser && gmailPass
