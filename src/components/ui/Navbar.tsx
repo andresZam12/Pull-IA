@@ -35,17 +35,18 @@ export function Navbar({
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-zinc-950/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-        
         {/* Brand Logo & Engine Badge */}
         <div className="flex items-center gap-3">
           <Link
             href="/"
             onClick={() => handleCategoryClick("ALL")}
-            className="group flex items-center gap-2 text-2xl font-black tracking-tight text-white transition hover:opacity-90"
+            className="group flex items-center gap-2.5 text-2xl font-black tracking-tight text-white transition hover:opacity-90"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-500 to-cyan-400 font-mono text-lg font-bold text-white shadow-lg shadow-indigo-500/25">
-              D
-            </span>
+            <img
+              src="/deplhoy-logo.png?v=2"
+              alt="Deplhoy Logo"
+              className="h-10 w-10 rounded-xl object-cover ring-1 ring-zinc-700/80 shadow-lg"
+            />
             <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-400 bg-clip-text text-transparent">
               Deplhoy
             </span>

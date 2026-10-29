@@ -142,7 +142,6 @@ export function Footer() {
   return (
     <footer id="newsletter" className="mt-20 border-t border-zinc-800/80 bg-zinc-950 text-zinc-400">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        
         {/* SoftStack Weekly Newsletter Section */}
         <div className="rounded-3xl border border-indigo-500/20 bg-gradient-to-b from-indigo-950/40 via-zinc-900/40 to-zinc-950 p-8 sm:p-12 lg:p-16 shadow-2xl shadow-indigo-950/20">
           <div className="mx-auto max-w-2xl text-center">
@@ -296,9 +295,11 @@ export function Footer() {
         {/* Footer Meta & Brand */}
         <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-zinc-800/60 pt-8 sm:flex-row">
           <div className="flex items-center gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 font-mono text-sm font-bold text-white shadow-md shadow-indigo-500/20">
-              D
-            </span>
+            <img
+              src="/deplhoy-logo.png?v=2"
+              alt="Deplhoy Logo"
+              className="h-9 w-9 rounded-xl object-cover ring-1 ring-zinc-700/80 shadow-md"
+            />
             <span className="text-base font-black text-white">Deplhoy</span>
             <span className="text-xs text-zinc-500">
               • Engine: <span className="font-semibold text-zinc-400">PULL-IA</span>
