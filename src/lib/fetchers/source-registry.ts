@@ -260,6 +260,26 @@ export function getAllFetchers(): BaseFetcher[] {
       language: "en",
       reputationScore: 0.94,
     }),
+    new RssFetcher({
+      name: "CNBC Tech & Markets",
+      slug: "cnbc-tech-markets",
+      url: "https://www.cnbc.com/technology/",
+      feedUrl: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19854910",
+      type: SourceType.RSS,
+      categories: [Category.EMPLOYABILITY],
+      language: "en",
+      reputationScore: 0.93,
+    }),
+    new RssFetcher({
+      name: "Stack Overflow Blog",
+      slug: "stackoverflow-blog",
+      url: "https://stackoverflow.blog",
+      feedUrl: "https://stackoverflow.blog/feed/",
+      type: SourceType.RSS,
+      categories: [Category.EMPLOYABILITY, Category.ENGINEERING],
+      language: "en",
+      reputationScore: 0.92,
+    }),
 
     // ── Developer Communities ────────────────────────────
     new HackerNewsFetcher(),

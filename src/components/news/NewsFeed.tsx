@@ -14,11 +14,73 @@ interface NewsFeedProps {
 
 const PAGE_SIZE = 12;
 
+/**
+ * Precision section resolver: ensures strict, non-overlapping categorization
+ * across [AI, ENGINEERING, MODELS, EMPLOYABILITY] based on structured metadata
+ * and domain-specific taxonomy.
+ */
+function resolvePreciseCategory(article: ArticleItem): string {
+  // 1. Technical Spec Sheets always belong to MODELS
+  if (article.aiModelSpec || article.summary?.category === "MODELS") {
+    return "MODELS";
+  }
+
+  const text = `${article.summary?.titleEs ?? ""} ${article.summary?.titleEn ?? ""} ${article.summary?.summaryEs ?? ""} ${article.sourceName}`.toLowerCase();
+  const dbCategory = article.summary?.category;
+
+  // 2. Strict EMPLOYABILITY detection (Tech Job Market, Salaries, Remote Work, Layoffs, Tech Stocks & Earnings)
+  if (
+    dbCategory === "EMPLOYABILITY" ||
+    /\b(empleabilidad|empleo|empleos|trabajo remoto|remoto|teletrabajo|salari|sueldo|contrataci|vacante|entrevista|despido|layoff|recorte de personal|bolsa|acciones|wall street|nasdaq|ingresos trimestrales| ganancias|adquisici|fusi[oó]n|ipo|mercado laboral|carrera|talento|reclutamiento|headhunter|cnbc)\b/i.test(text)
+  ) {
+    return "EMPLOYABILITY";
+  }
+
+  // 3. Strict MODELS detection (Foundation Model Releases, Benchmarks, Context Windows, Token Pricing, Weights)
+  if (
+    /\b(gpt-[456]|claude 3|gemini [123]|llama [34]|deepseek-r|deepseek-v|mistral|qwen|mmlu|swe-bench|humaneval|ventana de contexto|context window|mill[oó]n de tokens|pesos abiertos|open weights|cuantizaci[oó]n|fine-tuning|ficha t[eé]cnica)\b/i.test(text)
+  ) {
+    return "MODELS";
+  }
+
+  // 4. Strict ENGINEERING detection (Cybersecurity, CVEs, Cloud, DevOps, Software Architecture, Programming Languages)
+  const engineeringSources = [
+    "bleepingcomputer",
+    "the hacker news",
+    "securityweek",
+    "aws news blog",
+    "github engineering",
+    "microsoft azure blog",
+    "meta engineering",
+    "arxiv cs.se",
+  ];
+  if (
+    engineeringSources.some((src) => article.sourceName.toLowerCase().includes(src)) ||
+    /\b(vulnerabilidad|cve-\d|ransomware|malware|phishing|exploit|zero-day|ciberseguridad|parche|botnet|backdoor|arquitectura de software|microservicios|kubernetes|docker|devops|aws|azure|linux|kernel|postgresql|base de datos|rust|python|typescript|php|golang|compilador|protocolo|cortafuegos|firewall|servidor)\b/i.test(text)
+  ) {
+    return "ENGINEERING";
+  }
+
+  // 5. Strict AI detection (Agents, Automation, Multimodal, Robotics, AI Research)
+  if (
+    dbCategory === "AI" &&
+    /\b(inteligencia artificial|agente|agentes|llm|neuronal|aprendizaje autom[aá]tico|machine learning|deep learning|generativ|openai|anthropic|huggingface|hugging face|rob[oó]tica|automatizaci[oó]n|rag|copiloto)\b/i.test(text)
+  ) {
+    return "AI";
+  }
+
+  // Map legacy PROGRAMMING into ENGINEERING
+  if (dbCategory === "PROGRAMMING" || dbCategory === "ENGINEERING") {
+    return "ENGINEERING";
+  }
+
+  return dbCategory || "ENGINEERING";
+}
+
 export function NewsFeed({ initialArticles }: NewsFeedProps) {
   const { locale, t } = useLanguage();
   const [articles, setArticles] = useState<ArticleItem[]>(initialArticles);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [timeRange, setTimeRange] = useState<"7d" | "30d">("7d");
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [selectedArticle, setSelectedArticle] = useState<ArticleItem | null>(null);
@@ -40,7 +102,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
   // Reset pagination batch to 12 whenever filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [selectedCategory, searchQuery, timeRange]);
+  }, [selectedCategory, timeRange]);
 
   // Auto-dismiss feedback banner after 8 seconds
   useEffect(() => {
@@ -119,53 +181,43 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
     }
   }, [isSyncing, t]);
 
-  // Filter articles smoothly in memory by category, time window (7d vs 30d), and search query
+  // Filter articles smoothly in memory by strict category and time window (7d vs 30d)
   const filteredArticles = useMemo(() => {
     const now = Date.now();
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
     const maxAgeMs = timeRange === "7d" ? sevenDaysMs : thirtyDaysMs;
 
-    return articles.filter((article) => {
-      // 1. Category filter
-      if (selectedCategory && selectedCategory !== "ALL") {
-        if (article.summary?.category !== selectedCategory) {
-          return false;
+    return articles
+      .map((article) => {
+        const preciseCat = resolvePreciseCategory(article);
+        return {
+          ...article,
+          summary: article.summary
+            ? { ...article.summary, category: preciseCat }
+            : null,
+        };
+      })
+      .filter((article) => {
+        // 1. Strict Category filter
+        if (selectedCategory && selectedCategory !== "ALL") {
+          if (article.summary?.category !== selectedCategory) {
+            return false;
+          }
         }
-      }
 
-      // 2. Time range filter (7d Hot Feed vs 30d Monthly Archive)
-      // Always allow AI Model Spec sheets so the Models catalog remains complete
-      if (!article.aiModelSpec && article.publishedAt) {
-        const pubTime = new Date(article.publishedAt).getTime();
-        if (!Number.isNaN(pubTime) && now - pubTime > maxAgeMs) {
-          return false;
+        // 2. Time range filter (7d Hot Feed vs 30d Monthly Archive)
+        // Always allow AI Model Spec sheets so the Models catalog remains complete
+        if (!article.aiModelSpec && article.publishedAt) {
+          const pubTime = new Date(article.publishedAt).getTime();
+          if (!Number.isNaN(pubTime) && now - pubTime > maxAgeMs) {
+            return false;
+          }
         }
-      }
 
-      // 3. Search query filter (searches titles, summaries, key points, and sources in both languages)
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const titleEs = article.summary?.titleEs?.toLowerCase() || "";
-        const titleEn = article.summary?.titleEn?.toLowerCase() || "";
-        const summaryEs = article.summary?.summaryEs?.toLowerCase() || "";
-        const summaryEn = article.summary?.summaryEn?.toLowerCase() || "";
-        const keyPoints = (article.summary?.keyPoints || []).join(" ").toLowerCase();
-        const source = article.sourceName.toLowerCase();
-
-        return (
-          titleEs.includes(query) ||
-          titleEn.includes(query) ||
-          summaryEs.includes(query) ||
-          summaryEn.includes(query) ||
-          keyPoints.includes(query) ||
-          source.includes(query)
-        );
-      }
-
-      return true;
-    });
-  }, [articles, selectedCategory, searchQuery, timeRange, locale]);
+        return true;
+      });
+  }, [articles, selectedCategory, timeRange, locale]);
 
   // Slice articles into organized batches of 12 to avoid overwhelming the screen
   const visibleArticles = useMemo(() => {
@@ -181,7 +233,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
       />
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden border-b border-zinc-800/80 bg-gradient-to-b from-indigo-950/25 via-zinc-950 to-zinc-950 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+      <section className="relative overflow-hidden border-b border-zinc-800/80 bg-gradient-to-b from-indigo-950/25 via-zinc-950 to-zinc-950 px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
         <div className="mx-auto max-w-5xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-xs font-semibold text-violet-300 shadow-inner">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -198,67 +250,13 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
           <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">
             {t.heroDescription}
           </p>
-
-          {/* Quick Search Input & Time Window Filter */}
-          <div className="mx-auto mt-8 max-w-xl space-y-3">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.searchPlaceholder}
-                className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/90 py-3.5 pl-11 pr-4 text-sm text-white placeholder-zinc-500 shadow-inner focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              />
-              <svg
-                className="absolute left-4 top-4 h-4 w-4 text-zinc-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-
-            {/* 7-Day Hot Feed vs 30-Day Monthly Archive Filter */}
-            <div className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-800/90 bg-zinc-900/70 p-1">
-              <button
-                type="button"
-                onClick={() => setTimeRange("7d")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  timeRange === "7d"
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                <span>🔥</span>
-                <span>{t.filterRecent7d}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTimeRange("30d")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  timeRange === "30d"
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                <span>📅</span>
-                <span>{t.filterArchive30d}</span>
-              </button>
-            </div>
-          </div>
         </div>
       </section>
 
       {/* Main Content Area */}
       <main className="mx-auto flex-1 max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         
-        {/* Results Header with Category Label, Count & Live Refresh Button */}
+        {/* Results Header with Category Label, Count, Time Filter & Live Refresh Button */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-white">
@@ -271,7 +269,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {selectedCategory && selectedCategory !== "ALL" && (
               <button
                 onClick={() => setSelectedCategory(null)}
@@ -280,6 +278,34 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                 {t.showAll}
               </button>
             )}
+
+            {/* 7-Day Hot Feed vs 30-Day Monthly Archive Filter */}
+            <div className="inline-flex items-center gap-1 rounded-xl border border-zinc-800/90 bg-zinc-900/80 p-1">
+              <button
+                type="button"
+                onClick={() => setTimeRange("7d")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  timeRange === "7d"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <span>🔥</span>
+                <span>{t.filterRecent7d}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimeRange("30d")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  timeRange === "30d"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <span>📅</span>
+                <span>{t.filterArchive30d}</span>
+              </button>
+            </div>
 
             {/* Live Refresh / Sync Button */}
             <button

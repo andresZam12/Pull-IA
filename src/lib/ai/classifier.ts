@@ -13,14 +13,21 @@ import { Category } from "@/types";
 const MODEL = "gemini-flash-latest";
 const RELEVANCE_THRESHOLD = 0.4; // articles below this are rejected
 
-// JSON schema for structured output
+// JSON schema for structured output (strictly mapped to the 4 UI navigation sections)
+const ACTIVE_CATEGORIES = [
+  Category.AI,
+  Category.ENGINEERING,
+  Category.MODELS,
+  Category.EMPLOYABILITY,
+];
+
 const classificationSchema: Schema = {
   type: SchemaType.OBJECT,
   properties: {
     category: {
       type: SchemaType.STRING,
       format: "enum",
-      enum: Object.values(Category),
+      enum: ACTIVE_CATEGORIES,
       description: "The primary category for this article",
     },
     relevanceScore: {
@@ -75,15 +82,34 @@ export class ArticleClassifier {
       }
       return parsed;
     } catch (error) {
-      console.warn(`[Classifier] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using heuristic fallback.`);
-      const text = `${article.title} ${article.rawContent ?? ""}`.toLowerCase();
+      console.warn(`[Classifier] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using precision taxonomy classifier.`);
+      const text = `${article.title} ${article.rawContent ?? ""} ${article.sourceName}`.toLowerCase();
       let category = Category.ENGINEERING;
-      if (text.includes("agent") || text.includes("ai") || text.includes("llm") || text.includes("model") || text.includes("openai") || text.includes("anthropic")) {
-        category = Category.AI;
-      } else if (text.includes("stock") || text.includes("market") || text.includes("earning") || text.includes("nasdaq") || text.includes("salary") || text.includes("career") || text.includes("layoff")) {
+
+      if (
+        /\b(job|jobs|hiring|salary|salaries|career|remote work|layoff|layoffs|workforce|recruiting|developer survey|interview|stock|stocks|market|earnings|revenue|valuation|ipo|acquisition|nasdaq|wall street|cnbc)\b/i.test(
+          text
+        )
+      ) {
         category = Category.EMPLOYABILITY;
-      } else if (text.includes("php") || text.includes("python") || text.includes("rust") || text.includes("typescript") || text.includes("code") || text.includes("library")) {
-        category = Category.PROGRAMMING;
+      } else if (
+        /\b(gpt-[456]|claude 3|gemini [123]|llama [34]|deepseek|mistral|qwen|benchmark|mmlu|swe-bench|context window|open weights|parameters|quantization|fine-tuning)\b/i.test(
+          text
+        )
+      ) {
+        category = Category.MODELS;
+      } else if (
+        /\b(vulnerability|cve-\d|ransomware|malware|exploit|zero-day|cybersecurity|patch|breach|architecture|microservices|kubernetes|docker|devops|aws|azure|linux|kernel|database|postgresql|rust|python|typescript|php|golang|compiler)\b/i.test(
+          text
+        )
+      ) {
+        category = Category.ENGINEERING;
+      } else if (
+        /\b(ai|artificial intelligence|agent|agents|llm|llms|neural|machine learning|deep learning|generative|openai|anthropic|huggingface|hugging face|robotics|rag|copilot)\b/i.test(
+          text
+        )
+      ) {
+        category = Category.AI;
       }
 
       return {
@@ -132,26 +158,25 @@ export class ArticleClassifier {
   }
 
   private buildPrompt(article: RawArticle): string {
-    return `You are a content classifier for PULL-IA, a tech news platform for software engineers and tech professionals in Latin America.
+    return `You are a strict content classifier for PULL-IA, a tech news platform for software engineers in Latin America.
 
-Analyze this article and classify it:
+Analyze this article and classify it into ONE of the 4 strict sections below:
 
 TITLE: ${article.title}
 SOURCE: ${article.sourceName}
 CONTENT: ${article.rawContent ?? "(no content available)"}
 
-CATEGORIES:
-- AI: artificial intelligence, autonomous agents, multi-agent frameworks, LLMs, neural networks, foundation models (OpenAI, Anthropic, Google, Meta, Hugging Face)
-- ENGINEERING: cybersecurity, zero-day vulnerabilities, exploits (PHP, Linux, CVEs), software architecture, DevOps, cloud, infrastructure, system design, APIs, security patches
-- PROGRAMMING: programming languages (PHP, Python, Rust, Go, TypeScript), frameworks, libraries, coding practices, tutorials, developer tools
-- EMPLOYABILITY: tech stock market & Wall Street movements (NVIDIA, Microsoft, Apple, Alphabet, Meta, SaaS), tech finance, earnings, salaries, tech industry trends, layoffs, career
+STRICT SECTIONS (CHOOSE ONLY ONE):
+- EMPLOYABILITY: Tech job market, developer salaries, remote work trends, hiring, technical interviews, layoffs, workforce changes, and software company financial/stock market results (earnings, IPOs, acquisitions, valuations).
+- MODELS: Specific LLM / foundation model releases, benchmarks (MMLU, SWE-bench), context windows, token pricing, inference latency, quantization, and open-weight model comparisons.
+- ENGINEERING: Cybersecurity, CVEs, ransomware, zero-day vulnerabilities, software architecture, cloud/DevOps (AWS, Azure, Kubernetes), databases, Linux, and programming languages/frameworks (Python, Rust, TypeScript, PHP, Go).
+- AI: Applied Artificial Intelligence, autonomous AI agents, copilots, RAG workflows, enterprise AI adoption, robotics, and AI regulation.
 
 SCORING GUIDE:
-- 0.9-1.0: Breaking news, critical security zero-days, frontier AI agents, major stock/earnings movements from top companies
-- 0.7-0.9: Important updates, useful tools, significant industry developments
-- 0.5-0.7: Interesting but not urgent: opinion pieces, case studies, tutorials
-- 0.3-0.5: Low relevance: too niche, outdated, or tangentially related
-- 0.0-0.3: Not relevant: marketing content, paywalled fluff, unrelated topics
+- 0.9-1.0: Breaking news, critical security zero-days, frontier AI agents, major job market or stock/earnings movements
+- 0.7-0.9: Important updates, useful engineering tools, significant industry developments
+- 0.5-0.7: Interesting case studies or architectural analyses
+- 0.0-0.4: Irrelevant fluff
 
 Return a JSON object with category, relevanceScore, keyPoints (max 3), tags (max 5 lowercase), and isRelevant.`;
   }
