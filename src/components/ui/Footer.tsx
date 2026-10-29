@@ -296,9 +296,9 @@ export function Footer() {
         <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-zinc-800/60 pt-8 sm:flex-row">
           <div className="flex items-center gap-3">
             <img
-              src="/deplhoy-logo.png?v=2"
+              src="/deplhoy-logo.png?v=3"
               alt="Deplhoy Logo"
-              className="h-9 w-9 rounded-xl object-cover ring-1 ring-zinc-700/80 shadow-md"
+              className="h-9 w-9 object-contain drop-shadow-md"
             />
             <span className="text-base font-black text-white">Deplhoy</span>
             <span className="text-xs text-zinc-500">

@@ -7,6 +7,7 @@ import { ModelSpecCard } from "@/components/models/ModelSpecCard";
 import { ArticleModal } from "@/components/news/ArticleModal";
 import { Footer } from "@/components/ui/Footer";
 import { useLanguage } from "@/context/LanguageContext";
+import { getArticleImage } from "@/lib/utils/images";
 
 interface NewsFeedProps {
   initialArticles: ArticleItem[];
@@ -274,11 +275,23 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
     const maxAgeMs = timeRange === "7d" ? sevenDaysMs : thirtyDaysMs;
 
+    const usedImages = new Set<string>();
+
     return articles
       .map((article) => {
         const preciseCat = resolvePreciseCategory(article);
+        const contextText = `${article.summary?.titleEs ?? ""} ${article.summary?.titleEn ?? ""} ${article.summary?.summaryEs ?? ""} ${article.sourceName}`;
+        const uniqueImageUrl = getArticleImage(
+          article.id,
+          preciseCat,
+          article.imageUrl,
+          contextText,
+          usedImages
+        );
+
         return {
           ...article,
+          imageUrl: uniqueImageUrl,
           summary: article.summary
             ? { ...article.summary, category: preciseCat }
             : null,

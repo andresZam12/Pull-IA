@@ -55,11 +55,14 @@ export function NewsCard({ article, onOpenModal }: NewsCardProps) {
 
   // Extract a brief, engaging hook (first sentence or max 140 chars)
   const shortHook = cleanSummary.split(". ")[0].concat(".").slice(0, 140);
-  const imageUrl = getArticleImage(article.id, category, article.imageUrl);
+  const contextText = `${summary.titleEs} ${summary.titleEn} ${summary.summaryEs} ${article.sourceName}`;
+  const imageUrl =
+    article.imageUrl && article.imageUrl.startsWith("http")
+      ? article.imageUrl
+      : getArticleImage(article.id, category, article.imageUrl, contextText);
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-3xl border border-zinc-800/90 bg-zinc-900/60 shadow-lg backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-zinc-700 hover:bg-zinc-900 hover:shadow-2xl hover:shadow-indigo-500/10">
-      
       {/* 1. Featured Image with Overlay Badges */}
       <div
         onClick={() => onOpenModal(article)}
@@ -71,7 +74,12 @@ export function NewsCard({ article, onOpenModal }: NewsCardProps) {
           alt={title}
           loading="lazy"
           onError={(e) => {
-            e.currentTarget.src = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80";
+            e.currentTarget.src = getArticleImage(
+              `${article.id}-fallback`,
+              category,
+              null,
+              contextText
+            );
           }}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
@@ -146,7 +154,6 @@ export function NewsCard({ article, onOpenModal }: NewsCardProps) {
           </button>
         </div>
       </div>
-
     </div>
   );
 }

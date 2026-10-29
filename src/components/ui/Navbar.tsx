@@ -43,9 +43,9 @@ export function Navbar({
             className="group flex items-center gap-2.5 text-2xl font-black tracking-tight text-white transition hover:opacity-90"
           >
             <img
-              src="/deplhoy-logo.png?v=2"
+              src="/deplhoy-logo.png?v=3"
               alt="Deplhoy Logo"
-              className="h-10 w-10 rounded-xl object-cover ring-1 ring-zinc-700/80 shadow-lg"
+              className="h-10 w-10 object-contain drop-shadow-md"
             />
             <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-400 bg-clip-text text-transparent">
               Deplhoy

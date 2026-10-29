@@ -51,7 +51,11 @@ export function ArticleModal({ article, onClose }: ArticleModalProps) {
   const rawDetailedSummary = locale === "es" ? summary.summaryEs : summary.summaryEn;
   const title = cleanHtmlText(rawTitle);
   const detailedSummary = cleanHtmlText(rawDetailedSummary);
-  const imageUrl = getArticleImage(article.id, category, article.imageUrl);
+  const contextText = `${summary.titleEs} ${summary.titleEn} ${summary.summaryEs} ${article.sourceName}`;
+  const imageUrl =
+    article.imageUrl && article.imageUrl.startsWith("http")
+      ? article.imageUrl
+      : getArticleImage(article.id, category, article.imageUrl, contextText);
 
   // Calculate estimated reading time
   const totalWords = (detailedSummary + " " + summary.keyPoints.join(" ")).split(/\s+/).length;

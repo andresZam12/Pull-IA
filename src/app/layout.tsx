@@ -18,14 +18,14 @@ export const metadata: Metadata = {
     "El pulso diario sobre IA, ingeniería de software, modelos y empleabilidad. Resúmenes bilingües con IA impulsados por la arquitectura PULL-IA.",
   icons: {
     icon: [
-      { url: "/deplhoy-logo.png?v=2", sizes: "32x32", type: "image/png" },
-      { url: "/deplhoy-logo.png?v=2", sizes: "64x64", type: "image/png" },
-      { url: "/deplhoy-logo.png?v=2", sizes: "192x192", type: "image/png" },
-      { url: "/deplhoy-logo.png?v=2", sizes: "512x512", type: "image/png" },
+      { url: "/deplhoy-logo.png?v=3", sizes: "32x32", type: "image/png" },
+      { url: "/deplhoy-logo.png?v=3", sizes: "64x64", type: "image/png" },
+      { url: "/deplhoy-logo.png?v=3", sizes: "192x192", type: "image/png" },
+      { url: "/deplhoy-logo.png?v=3", sizes: "512x512", type: "image/png" },
     ],
-    shortcut: [{ url: "/deplhoy-logo.png?v=2", type: "image/png" }],
+    shortcut: [{ url: "/deplhoy-logo.png?v=3", type: "image/png" }],
     apple: [
-      { url: "/deplhoy-logo.png?v=2", sizes: "180x180", type: "image/png" },
+      { url: "/deplhoy-logo.png?v=3", sizes: "180x180", type: "image/png" },
     ],
   },
 };
