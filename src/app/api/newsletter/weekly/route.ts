@@ -18,10 +18,30 @@ export async function OPTIONS() {
 
 /**
  * GET /api/newsletter/weekly
- * Returns a preview of the curated Weekly Digest across the 4 sections.
+ * - When invoked by Vercel Cron (`vercel-cron` User-Agent or `?dispatch=true`),
+ *   dispatches the Weekly Newsletter Issue to all confirmed subscribers.
+ * - Otherwise returns a preview of the curated Weekly Digest across the 4 sections.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const isCron =
+      searchParams.get("dispatch") === "true" ||
+      (request.headers.get("user-agent") ?? "").includes("vercel-cron");
+
+    if (isCron) {
+      const result = await dispatchWeeklyNewsletterIssue();
+      return NextResponse.json(
+        {
+          success: true,
+          cronTriggered: true,
+          message: `Boletín semanal enviado automáticamente (${result.articlesCount} noticias clave para ${result.subscribersCount} suscriptores activos).`,
+          ...result,
+        },
+        { headers: CORS_HEADERS }
+      );
+    }
+
     const digest = await buildWeeklyNewsletterDigest();
     return NextResponse.json(
       {
@@ -35,7 +55,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        error: "No se pudo generar la vista previa del boletín semanal.",
+        error: "No se pudo procesar el boletín semanal.",
       },
       { status: 500, headers: CORS_HEADERS }
     );
