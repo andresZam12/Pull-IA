@@ -102,13 +102,12 @@ export async function POST(request: NextRequest) {
         process.env.NEXT_PUBLIC_APP_URL || "https://deplhoy-zeta.vercel.app";
       const unsubUrl = `${appUrl}/api/subscribe?unsubscribe=${subscriber.unsubscribeToken}`;
       const html = buildWeeklyNewsletterHtml(digest, unsubUrl);
-      await sendNewsletterEmail(
+      emailDispatched = await sendNewsletterEmail(
         subscriber.email,
         subscriber.unsubscribeToken,
         html,
         `¡Bienvenido a SoftStack! ${digest.titleEs}`
       );
-      emailDispatched = true;
     } catch (emailErr) {
       console.warn(
         "[Subscribe] Welcome digest email skipped or provider restricted:",
@@ -120,8 +119,9 @@ export async function POST(request: NextRequest) {
       {
         success: true,
         emailDispatched,
-        message:
-          "¡Suscripción exitosa al SoftStack Semanal! Tu correo quedó registrado para recibir cada viernes el resumen ejecutivo con las noticias más relevantes.",
+        message: emailDispatched
+          ? "¡Suscripción exitosa! Te acabamos de enviar la edición semanal a tu bandeja de entrada."
+          : "¡Tu correo quedó registrado y confirmado en la base de datos de SoftStack! Aquí abajo tienes tu edición semanal personalizada.",
         subscriber: {
           email: subscriber.email,
           interests: subscriber.interests,
