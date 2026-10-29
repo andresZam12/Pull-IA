@@ -10,6 +10,7 @@ import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import type { SummaryResult, RawArticle } from "@/types";
 import { cleanHtmlText } from "@/lib/utils/text";
 import { translateToSpanish } from "@/lib/utils/translate";
+import { buildEditorialAnalysis } from "@/lib/utils/editorial-analysis";
 
 const MODEL = "gemini-flash-latest";
 
@@ -82,23 +83,37 @@ export class ArticleSummarizer {
         aiModel: this.modelName,
       };
     } catch (error) {
-      console.warn(`[Summarizer] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using Spanish translation fallback.`);
+      console.warn(`[Summarizer] Gemini API unavailable (${error instanceof Error ? error.message : "error"}), using structured editorial fallback.`);
       const cleanTitle = cleanHtmlText(article.title);
-      const cleanSnippet = cleanHtmlText(article.rawContent || article.title).slice(0, 300).trim();
+      const cleanSnippet = cleanHtmlText(article.rawContent || article.title).slice(0, 1200).trim();
       const titleEs = await translateToSpanish(cleanTitle);
-      const summaryEs = await translateToSpanish(cleanSnippet);
+      const translatedSnippetEs = await translateToSpanish(cleanSnippet);
+      const analysisEs = buildEditorialAnalysis({
+        titleEs,
+        titleEn: cleanTitle,
+        summaryEs: translatedSnippetEs,
+        summaryEn: cleanSnippet,
+        category: "ENGINEERING",
+        sourceName: article.sourceName,
+        locale: "es",
+      });
+      const analysisEn = buildEditorialAnalysis({
+        titleEs,
+        titleEn: cleanTitle,
+        summaryEs: translatedSnippetEs,
+        summaryEn: cleanSnippet,
+        category: "ENGINEERING",
+        sourceName: article.sourceName,
+        locale: "en",
+      });
       return {
         titleEs,
         titleEn: cleanTitle,
-        summaryEs,
-        summaryEn: cleanSnippet,
-        keyPoints: [
-          titleEs,
-          `Fuente verificada: ${article.sourceName}.`,
-          "Análisis técnico relevante para ingenieros y desarrolladores."
-        ],
+        summaryEs: analysisEs.paragraphs.join("\n\n"),
+        summaryEn: analysisEn.paragraphs.join("\n\n"),
+        keyPoints: analysisEs.keyPoints,
         sourceUrls: [article.url],
-        aiModel: "neural-fallback-es",
+        aiModel: "editorial-structured-es",
       };
     }
   }

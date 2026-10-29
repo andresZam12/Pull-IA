@@ -14,6 +14,7 @@ import { ArticleModal } from "@/components/news/ArticleModal";
 import { useLanguage } from "@/context/LanguageContext";
 import { getArticleImage } from "@/lib/utils/images";
 import { cleanHtmlText } from "@/lib/utils/text";
+import { buildEditorialAnalysis } from "@/lib/utils/editorial-analysis";
 import { Category } from "@/types";
 
 interface NewsFeedProps {
@@ -576,7 +577,9 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
               <span className="rule" />
               <span>
                 {isSyncing
-                  ? "Sincronizando vía gRPC..."
+                  ? locale === "es"
+                    ? "Actualizando..."
+                    : "Refreshing..."
                   : locale === "es"
                   ? "Actualizado ahora"
                   : "Updated just now"}
@@ -637,11 +640,11 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                 <span>
                   {isSyncing
                     ? locale === "es"
-                      ? "Sincronizando gRPC..."
-                      : "Syncing gRPC..."
+                      ? "Actualizando..."
+                      : "Refreshing..."
                     : locale === "es"
-                    ? "Actualizar · gRPC"
-                    : "Refresh · gRPC"}
+                    ? "Actualizar"
+                    : "Refresh"}
                 </span>
               </button>
             </div>
@@ -844,9 +847,22 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
 
                   const title = cleanHtmlText(rawTitle);
                   const cleanExcerpt = cleanHtmlText(rawSummary);
+                  const baseExcerpt =
+                    cleanExcerpt.length < 35 ||
+                    cleanExcerpt.toLowerCase() === title.toLowerCase()
+                      ? buildEditorialAnalysis({
+                          titleEs: summary?.titleEs || title,
+                          titleEn: summary?.titleEn || title,
+                          summaryEs: summary?.summaryEs || "",
+                          summaryEn: summary?.summaryEn || "",
+                          category: String(catKey),
+                          sourceName: article.sourceName,
+                          locale,
+                        }).paragraphs[1]
+                      : cleanExcerpt;
                   const excerpt =
-                    cleanExcerpt.split(". ").slice(0, 2).join(". ") +
-                    (cleanExcerpt.endsWith(".") ? "" : ".");
+                    baseExcerpt.split(". ").slice(0, 2).join(". ") +
+                    (baseExcerpt.endsWith(".") ? "" : ".");
 
                   const storyNumber = String(index + 1).padStart(2, "0");
                   const timeLabel = formatRelativeTime(
