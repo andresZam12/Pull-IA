@@ -1,6 +1,7 @@
 import { cleanHtmlText } from "@/lib/utils/text";
 
 export interface EditorialAnalysis {
+  cardLead: string;
   paragraphs: string[];
   keyPoints: string[];
   advantages: string[];
@@ -10,9 +11,19 @@ export interface EditorialAnalysis {
   impactScore: number;
 }
 
+function hashText(str: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash >>> 0);
+}
+
 /**
- * Generates a rich, structured, multi-paragraph executive analysis, actionable key points,
- * and technical advantages vs. disadvantages tailored to the specific article's subject matter.
+ * Generates a rich, structured, multi-paragraph executive analysis, a complete card lead
+ * (eliminating sparse 1-sentence cards), actionable key points, and technical pros/cons
+ * tailored to the specific article's subject matter.
  */
 export function buildEditorialAnalysis(params: {
   titleEs: string;
@@ -33,7 +44,7 @@ export function buildEditorialAnalysis(params: {
     category,
     sourceName,
     keyPoints = [],
-    relevanceScore = 0.85,
+    relevanceScore = 0.86,
     locale,
   } = params;
 
@@ -41,14 +52,19 @@ export function buildEditorialAnalysis(params: {
   const cleanTitle = cleanHtmlText(isEs ? titleEs : titleEn || titleEs);
   const rawBody = cleanHtmlText(isEs ? summaryEs : summaryEn || summaryEs);
   const fullSignal = `${titleEs} ${titleEn} ${summaryEs} ${summaryEn} ${sourceName} ${category}`.toLowerCase();
+  const h = hashText(`${cleanTitle}:${sourceName}`);
 
-  // Detect technical sub-domain for precise contextual depth, pros & cons
+  // Fine-grained sub-domain detection so adjacent cards in the same category stay distinct
   const isCybersecurity =
-    /\b(cve-\d|vulnerabilidad|ransomware|malware|phishing|exploit|zero-day|ciberseguridad|hacker|brecha|seguridad|firewall|botnet|backdoor|cifrado|ataque|parche)\b/i.test(
+    /\b(cve-\d|vulnerabilidad|ransomware|malware|phishing|exploit|zero-day|ciberseguridad|hacker|brecha|seguridad|firewall|botnet|backdoor|cifrado|ataque|parche|autenticaci[oó]n)\b/i.test(
       fullSignal
     );
   const isHardwareChips =
-    /\b(nvidia|gpu|chip|semiconductor|procesador|cpu|hardware|quantum|cuántic|servidor|datacenter|centro de datos|arm|intel|amd|tsmc)\b/i.test(
+    /\b(nvidia|gpu|chip|semiconductor|procesador|cpu|hardware|quantum|cu[aá]ntic|servidor|datacenter|centro de datos|arm|intel|amd|tsmc|bater[ií]a|rob[oó]tica|robot|asimo)\b/i.test(
+      fullSignal
+    );
+  const isEnterpriseOrg =
+    /\b(empresa|organigrama|corporativ|negocio|legal|abogado|contrato|finanzas|banca|salud|m[eé]dic|educaci[oó]n|productividad|flujos de trabajo|workflow|legora|operativo)\b/i.test(
       fullSignal
     );
   const isEmployability =
@@ -58,87 +74,161 @@ export function buildEditorialAnalysis(params: {
     );
   const isModels =
     category === "MODELS" ||
-    /\b(gpt-|claude|gemini|llama|deepseek|mistral|qwen|benchmark|mmlu|swe-bench|ventana de contexto|tokens|parámetros|pesos abiertos|open weights|fine-tuning)\b/i.test(
+    /\b(gpt-|claude|gemini|llama|deepseek|mistral|qwen|codex|benchmark|mmlu|swe-bench|ventana de contexto|tokens|par[aá]metros|pesos abiertos|open weights|fine-tuning|razonamiento)\b/i.test(
       fullSignal
     );
   const isAI =
     category === "AI" ||
-    /\b(inteligencia artificial|agente|agentes|llm|openai|anthropic|huggingface|robótica|neuronal|generativ|machine learning|deep learning|copiloto|rag)\b/i.test(
+    /\b(inteligencia artificial|agente|agentes|agentic|llm|openai|anthropic|huggingface|neuronal|generativ|machine learning|deep learning|copiloto|rag|chatgpt)\b/i.test(
       fullSignal
     );
 
-  // 1. Build substantive multi-paragraph executive summary
+  // Extract existing paragraphs from rawBody, ignoring simple title repeats
   const existingParas = rawBody
     .split(/\n+/)
     .map((p) => p.trim())
-    .filter((p) => p.length > 25 && p.toLowerCase() !== cleanTitle.toLowerCase());
-
-  const paragraphs: string[] = [];
-
-  if (existingParas.length > 0) {
-    paragraphs.push(...existingParas);
-  } else {
-    paragraphs.push(
-      isEs
-        ? `El reporte publicado por ${sourceName} aborda un acontecimiento clave en el ecosistema tecnológico actual: "${cleanTitle}". Este desarrollo marca un punto de inflexión relevante dentro del área de ${getCategoryLabelEs(category)}, captando la atención de equipos de ingeniería, arquitectos de software y líderes técnicos a nivel global.`
-        : `The report published by ${sourceName} covers a key development in today's technology ecosystem: "${cleanTitle}". This milestone represents a significant shift within ${category}, drawing close attention from engineering teams, software architects, and technical leaders worldwide.`
+    .filter(
+      (p) => p.length > 20 && p.toLowerCase() !== cleanTitle.toLowerCase()
     );
+
+  const firstRaw = existingParas[0] || "";
+  const normalizedFirst = firstRaw
+    ? firstRaw.endsWith(".") || firstRaw.endsWith("?") || firstRaw.endsWith("!")
+      ? firstRaw
+      : `${firstRaw}.`
+    : "";
+
+  // Contextual expansion variants so even short 1-sentence RSS descriptions become rich leads
+  const leadExpansionsEs = isCybersecurity
+    ? [
+        `El reporte técnico de ${sourceName} detalla el alcance operativo de este vector, las versiones comprometidas y las medidas de contención recomendadas para equipos de seguridad e infraestructura.`,
+        `Analizado por especialistas de ${sourceName}, el incidente pone de relieve la importancia de auditar dependencias críticas, reforzar controles de acceso y aplicar parches preventivos en producción.`,
+        `La investigación difundida por ${sourceName} examina la cadena de ataque y ofrece indicadores clave para proteger entornos empresariales, servidores cloud y flujos de despliegue continuo.`,
+      ]
+    : isEnterpriseOrg
+    ? [
+        `A través de este caso documentado por ${sourceName}, se examina cómo la adopción de sistemas inteligentes redefine la estructura operativa, automatiza procesos complejos y eleva la capacidad de ejecución de los equipos.`,
+        `El análisis de ${sourceName} profundiza en la integración práctica de estas tecnologías dentro del flujo de trabajo diario, combinando supervisión experta con automatización de alto valor.`,
+        `La publicación de ${sourceName} muestra cómo las organizaciones están rediseñando sus procesos internos, delegando tareas intensivas en datos a arquitecturas asistidas por IA.`,
+      ]
+    : isModels
+    ? [
+        `El informe técnico de ${sourceName} evalúa las mejoras en arquitectura, capacidad de razonamiento multimodal, latencia de inferencia y eficiencia operativa frente a los estándares actuales de la industria.`,
+        `Documentado por ${sourceName}, este avance introduce optimizaciones clave en manejo de contexto y generación estructurada para desarrolladores que construyen aplicaciones sobre modelos de última generación.`,
+        `La cobertura de ${sourceName} desglosa el rendimiento real del modelo en escenarios complejos de ingeniería, programación asistida y despliegue escalable vía API o entorno local.`,
+      ]
+    : isEmployability
+    ? [
+        `El seguimiento editorial de ${sourceName} analiza las repercusiones directas sobre la contratación tecnológica, la valoración de habilidades de ingeniería y la estrategia de las principales firmas del sector.`,
+        `Reportado por ${sourceName}, este movimiento refleja la evolución del mercado laboral tech hacia perfiles híbridos con sólido dominio arquitectónico y capacidad de adaptación tecnológica.`,
+        `La nota de ${sourceName} aporta contexto sobre las dinámicas financieras y de talento que están definiendo las oportunidades profesionales para desarrolladores e ingenieros en 2026.`,
+      ]
+    : isHardwareChips
+    ? [
+        `El artículo de ${sourceName} explora las innovaciones de ingeniería física, eficiencia energética y capacidad de cómputo necesarias para sostener la próxima generación de sistemas autónomos y centros de datos.`,
+        `Analizado por ${sourceName}, este hito en hardware e infraestructura redefine la densidad de procesamiento disponible para cargas intensivas de inteligencia artificial y robótica avanzada.`,
+        `La cobertura técnica de ${sourceName} detalla cómo la convergencia entre diseño electrónico y software optimizado impulsa nuevos estándares de rendimiento industrial.`,
+      ]
+    : isAI
+    ? [
+        `La publicación de ${sourceName} examina el paso de modelos conversacionales a arquitecturas agénticas capaces de planificar, ejecutar herramientas e integrarse de forma nativa en flujos reales de ingeniería.`,
+        `En este análisis de ${sourceName} se detallan los mecanismos técnicos, retos de confiabilidad y ganancias de productividad que conlleva desplegar inteligencia artificial aplicada a escala.`,
+        `El reporte de ${sourceName} profundiza en cómo esta evolución tecnológica transforma la interacción entre desarrolladores, sistemas autónomos y plataformas de software modernas.`,
+      ]
+    : [
+        `El informe técnico de ${sourceName} analiza el impacto directo de este desarrollo en la arquitectura de software moderna, la mantenibilidad del código y la eficiencia de los equipos de ingeniería.`,
+        `Documentado por ${sourceName}, este avance propone mejoras concretas en rendimiento, observabilidad y herramientas de desarrollo para entornos de producción exigentes.`,
+        `La cobertura de ${sourceName} explora los fundamentos técnicos detrás de "${cleanTitle}" y sus implicaciones prácticas para el ecosistema de desarrollo actual.`,
+      ];
+
+  const leadExpansionsEn = [
+    `Reported by ${sourceName}, this analysis explores the technical architecture, operational trade-offs, and real-world engineering impact behind "${cleanTitle}".`,
+    `This report from ${sourceName} examines how the development reshapes production workflows, system reliability, and strategic decision-making across technical teams.`,
+    `Covered in depth by ${sourceName}, this update highlights key implementation details, performance benchmarks, and practical takeaways for software engineers.`,
+  ];
+
+  const chosenExpansion = isEs
+    ? leadExpansionsEs[h % leadExpansionsEs.length]
+    : leadExpansionsEn[h % leadExpansionsEn.length];
+
+  // Build paragraph 1 (and cardLead) so it is NEVER a tiny 1-line stub
+  let paragraph1: string;
+  if (!normalizedFirst) {
+    paragraph1 = isEs
+      ? `El reporte publicado por ${sourceName} aborda un acontecimiento clave en el ecosistema tecnológico actual: "${cleanTitle}". ${chosenExpansion}`
+      : `The report published by ${sourceName} covers a key milestone in today's technology ecosystem: "${cleanTitle}". ${chosenExpansion}`;
+  } else if (normalizedFirst.length < 185) {
+    paragraph1 = `${normalizedFirst} ${chosenExpansion}`;
+  } else {
+    paragraph1 = normalizedFirst;
   }
 
-  // Ensure we always have at least 3 rich, informative paragraphs
-  if (paragraphs.length < 2) {
-    if (isCybersecurity) {
-      paragraphs.push(
-        isEs
-          ? `Desde una perspectiva de arquitectura y seguridad ofensiva/defensiva, este hallazgo reportado por ${sourceName} expone vectores críticos que afectan la superficie de ataque en infraestructuras modernas. Los equipos de SecOps y administración de sistemas deben priorizar la revisión de versiones afectadas, el endurecimiento de políticas de acceso (Zero Trust) y la aplicación inmediata de mitigaciones o parches oficiales.`
-          : `From an offensive and defensive security architecture standpoint, this finding reported by ${sourceName} exposes critical vectors affecting modern infrastructure attack surfaces. SecOps and system administration teams should prioritize auditing affected versions, hardening Zero Trust access policies, and applying official patches immediately.`
-      );
-    } else if (isModels) {
-      paragraphs.push(
-        isEs
-          ? `En el plano técnico de modelos fundacionales, el avance destaca mejoras sustanciales en eficiencia de inferencia, razonamiento estructurado y relación costo-rendimiento por millón de tokens. Estas capacidades redefinen los criterios de selección de modelos para pipelines de producción, agentes autónomos y sistemas de generación aumentada por recuperación (RAG).`
-          : `On the foundation model front, this release highlights substantial gains in inference efficiency, structured reasoning, and cost-to-performance ratio per million tokens. These capabilities redefine model selection criteria for production pipelines, autonomous agents, and retrieval-augmented generation (RAG) systems.`
-      );
-    } else if (isEmployability) {
-      paragraphs.push(
-        isEs
-          ? `En cuanto al impacto sobre el mercado laboral tecnológico y la dinámica financiera del sector, la noticia refleja cómo la adopción de automatización e inteligencia artificial está reconfigurando los perfiles más demandados. Las empresas priorizan cada vez más ingenieros con dominio de arquitectura de sistemas, integración de agentes IA y criterio de producto.`
-          : `Regarding the tech job market and sector dynamics, this news reflects how automation and AI adoption are reshaping the most in-demand engineering profiles. Companies increasingly prioritize developers with strong systems architecture skills, AI agent integration, and product judgment.`
-      );
-    } else if (isHardwareChips) {
-      paragraphs.push(
-        isEs
-          ? `A nivel de infraestructura física y cómputo de alto rendimiento, esta evolución impacta directamente la capacidad de procesamiento en centros de datos y dispositivos en el borde (Edge Computing). El balance entre consumo energético, ancho de banda de memoria y densidad de cómputo sigue siendo el factor determinante para escalar cargas de trabajo intensivas.`
-          : `At the physical infrastructure and high-performance computing level, this evolution directly impacts processing capacity across data centers and edge devices. The balance between power efficiency, memory bandwidth, and compute density remains the decisive factor for scaling intensive workloads.`
-      );
-    } else if (isAI) {
-      paragraphs.push(
-        isEs
-          ? `En el ámbito de la inteligencia artificial aplicada, este avance demuestra la transición desde asistentes conversacionales pasivos hacia sistemas agénticos capaces de ejecutar flujos de trabajo complejos, interactuar con APIs externas y automatizar tareas críticas de ingeniería de software con supervisión humana.`
-          : `In applied artificial intelligence, this advance demonstrates the transition from passive conversational assistants to agentic systems capable of executing complex workflows, interacting with external APIs, and automating critical software engineering tasks under human supervision.`
-      );
-    } else {
-      paragraphs.push(
-        isEs
-          ? `En el contexto de la ingeniería de software moderna, este desarrollo documentado por ${sourceName} impulsa mejores prácticas en modularidad, mantenibilidad de código, observabilidad y despliegue continuo. Comprender sus fundamentos técnicos permite a los equipos adoptar herramientas más resilientes y reducir la deuda técnica a mediano plazo.`
-          : `In the context of modern software engineering, this development documented by ${sourceName} drives best practices in modularity, code maintainability, observability, and continuous deployment. Understanding its technical foundations enables teams to adopt more resilient tooling and reduce technical debt.`
-      );
+  // Card lead: rich 240-330 char summary for the grid card so cards never look empty
+  const cardLead =
+    paragraph1.length > 330
+      ? `${paragraph1.slice(0, 325).replace(/\s+\S*$/, "")}…`
+      : paragraph1;
+
+  const paragraphs: string[] = [paragraph1];
+
+  // Add any remaining paragraphs from the original source if present
+  if (existingParas.length > 1) {
+    for (let i = 1; i < existingParas.length; i++) {
+      paragraphs.push(existingParas[i]);
     }
   }
 
-  if (paragraphs.length < 3) {
+  // Paragraph 2: Deep technical & architectural context
+  if (paragraphs.length < 2) {
+    const p2PoolEs = isCybersecurity
+      ? [
+          `Desde una perspectiva de seguridad ofensiva y defensiva, lo expuesto en "${cleanTitle}" exige revisar la superficie de exposición en servicios conectados, validar la integridad de las cadenas de suministro de software y priorizar la aplicación de mitigaciones oficiales recomendadas por ${sourceName}.`,
+          `A nivel de infraestructura y operaciones (SecOps), este escenario demuestra que la velocidad de respuesta entre la divulgación de un fallo y su remediación efectiva es crítica para evitar movimientos laterales, exfiltración de activos o interrupciones operativas.`,
+        ]
+      : isEnterpriseOrg
+      ? [
+          `En el plano organizacional y de arquitectura de procesos, la propuesta en torno a "${cleanTitle}" ilustra cómo los sistemas agénticos dejan de ser herramientas aisladas para integrarse como capas operativas que colaboran antes, durante y después de cada decisión humana.`,
+          `Para los equipos técnicos y de negocio, esta transformación implica diseñar flujos con trazabilidad, control de calidad automatizado y permisos granulares, logrando que la inteligencia artificial amplifique el criterio experto sin comprometer la gobernanza.`,
+        ]
+      : isModels
+      ? [
+          `Desde la ingeniería de modelos y sistemas de inferencia, "${cleanTitle}" refleja la intensa competencia por optimizar el razonamiento paso a paso, reducir el costo por millón de tokens y ampliar la ventana de contexto efectiva en tareas de código y análisis profundo.`,
+          `Al evaluar su incorporación en pipelines de producción o arquitecturas RAG, los arquitectos de software deben contrastar la ganancia en precisión frente a la latencia de respuesta, los límites de tasa y los requisitos de infraestructura.`,
+        ]
+      : isEmployability
+      ? [
+          `En relación con el mercado laboral y la estrategia corporativa, los datos alrededor de "${cleanTitle}" confirman una reconfiguración acelerada de los perfiles más buscados: se premia la capacidad de diseñar sistemas completos, auditar código generado por IA y resolver problemas de negocio reales.`,
+          `Para desarrolladores e ingenieros de software, entender estas señales del mercado permite orientar el aprendizaje continuo hacia áreas de alta resiliencia como arquitectura distribuida, seguridad, datos e integración de agentes inteligentes.`,
+        ]
+      : [
+          `Desde el punto de vista de la ingeniería de software y arquitectura de sistemas, los avances descritos en "${cleanTitle}" apuntan a reducir la fricción en el ciclo de vida del desarrollo, mejorar la confiabilidad en producción y estandarizar la integración entre herramientas.`,
+          `La adopción de este tipo de soluciones documentadas por ${sourceName} requiere evaluar cuidadosamente la compatibilidad con el stack existente, el impacto en observabilidad y el retorno técnico a mediano plazo para el equipo.`,
+        ];
+
+    const p2PoolEn = [
+      `From a systems architecture and engineering perspective, the developments surrounding "${cleanTitle}" highlight critical shifts in how modern teams design, deploy, and govern scalable software infrastructure.`,
+      `Evaluating this milestone reported by ${sourceName} requires balancing immediate productivity and performance gains against operational governance, maintainability, and long-term architectural resilience.`,
+    ];
+
     paragraphs.push(
-      isEs
-        ? `Para profundizar en las métricas exactas, declaraciones oficiales, fragmentos de código o documentación primaria, te recomendamos abrir directamente la publicación original de ${sourceName} mediante el botón de acceso directo incluido en esta ficha.`
-        : `To explore the exact metrics, official statements, code snippets, or primary documentation, we recommend opening the original publication on ${sourceName} directly using the source link button included in this briefing.`
+      isEs ? p2PoolEs[h % p2PoolEs.length] : p2PoolEn[h % p2PoolEn.length]
     );
   }
 
-  // 2. Filter out generic/placeholder key points and enrich to 4 solid takeaways
+  // Paragraph 3: Direct source guidance & actionable synthesis
+  if (paragraphs.length < 3) {
+    paragraphs.push(
+      isEs
+        ? `Esta ficha editorial sintetiza los ejes técnicos más importantes de la noticia para ofrecerte contexto inmediato; para revisar las métricas primarias, demostraciones completas y declaraciones oficiales, accede directamente al artículo original en ${sourceName} desde los enlaces destacados en esta ventana.`
+        : `This editorial briefing synthesizes the core technical dimensions of the story to give you immediate context; to inspect primary metrics, full demonstrations, and official statements, open the original article on ${sourceName} via the direct source links in this modal.`
+    );
+  }
+
+  // 2. Filter out generic/placeholder key points and build 4 rich, specific takeaways
   const filteredPoints = keyPoints.filter(
     (kp) =>
       kp &&
-      kp.trim().length > 15 &&
+      kp.trim().length > 18 &&
       !kp.includes("Fuente verificada:") &&
       !kp.includes("Análisis técnico relevante para ingenieros") &&
       kp.trim().toLowerCase() !== cleanTitle.toLowerCase()
@@ -147,49 +237,49 @@ export function buildEditorialAnalysis(params: {
   const finalKeyPoints: string[] = [...filteredPoints];
 
   if (finalKeyPoints.length < 4) {
-    const domainPointsEs = isCybersecurity
+    const specificPointsEs = isCybersecurity
       ? [
-          `Evento reportado y verificado a través de ${sourceName} con impacto directo en seguridad de sistemas.`,
-          "Exige revisión preventiva de dependencias, configuraciones de red y controles de autenticación.",
-          "La detección temprana y el parchado oportuno reducen drásticamente el riesgo de explotación activa.",
-          "Se recomienda consultar el boletín oficial en la fuente para ver indicadores de compromiso (IoCs) y versiones exactas.",
+          `Alerta e investigación técnica documentada por ${sourceName} sobre "${cleanTitle}".`,
+          "Identifica vectores de exposición que requieren auditoría de versiones, credenciales y políticas de red.",
+          "Prioriza la contención preventiva y la actualización de componentes afectados en entornos productivos.",
+          `Incluye enlace directo a ${sourceName} para consultar detalles forenses, parches e indicadores técnicos.`,
+        ]
+      : isEnterpriseOrg
+      ? [
+          `Caso de transformación operativa y flujos agénticos analizado por ${sourceName}.`,
+          "Integra modelos avanzados de IA directamente en procesos críticos, reduciendo tiempos de análisis manual.",
+          "Establece un esquema de colaboración donde la automatización resuelve tareas repetitivas bajo supervisión experta.",
+          `Accede a la publicación oficial en ${sourceName} para conocer la arquitectura e implementación completa.`,
         ]
       : isModels
       ? [
-          `Lanzamiento o evaluación técnica cubierta por ${sourceName} sobre arquitecturas de modelos avanzados.`,
-          "Optimiza la relación entre precisión en benchmarks (MMLU / código), latencia y costo operativo.",
-          "Facilita la integración mediante APIs estándar o despliegue local según los requerimientos de privacidad.",
-          "Consulta el enlace directo a la fuente original para revisar tablas comparativas y pruebas de rendimiento.",
+          `Análisis de capacidades, arquitectura y rendimiento de modelos publicado por ${sourceName}.`,
+          "Mejora la precisión en razonamiento complejo, generación de código y procesamiento de contexto extenso.",
+          "Impacta la selección de modelos e infraestructura para equipos que despliegan agentes y pipelines de IA.",
+          `Consulta la fuente directa en ${sourceName} para ver comparativas, benchmarks y especificaciones oficiales.`,
         ]
       : isEmployability
       ? [
-          `Tendencia clave del mercado laboral y empresarial tecnológico reportada por ${sourceName}.`,
-          "Evidencia el cambio en las competencias técnicas y estratégicas más valoradas por la industria en 2026.",
-          "Impacta la planificación de carrera, esquemas de contratación remota y valuación de empresas tech.",
-          "Revisa el artículo completo en la fuente oficial para conocer cifras detalladas y contexto corporativo.",
-        ]
-      : isAI
-      ? [
-          `Innovación en inteligencia artificial y automatización destacada por ${sourceName}.`,
-          "Acelera la productividad de equipos técnicos mediante flujos agénticos e integración nativa en herramientas.",
-          "Plantea nuevos estándares de validación, gobernanza de datos y confiabilidad en entornos de producción.",
-          "Accede a la fuente original para explorar demostraciones técnicas y casos de uso documentados.",
+          `Radiografía del sector tecnológico y evolución del talento reportada por ${sourceName}.`,
+          "Muestra cómo la automatización redefine las competencias clave exigidas a ingenieros y líderes técnicos.",
+          "Aporta señales claras sobre inversión corporativa, contrataciones y adopción tecnológica empresarial.",
+          `Lee el informe original en ${sourceName} para profundizar en las cifras y declaraciones completas.`,
         ]
       : [
-          `Actualización técnica de ingeniería de software analizada por ${sourceName}.`,
-          "Enfocada en mejorar el rendimiento, la escalabilidad arquitectónica y la experiencia de desarrollo (DX).",
-          "Aporta criterios prácticos para modernizar stacks tecnológicos y optimizar despliegues en la nube.",
-          "Visita el enlace oficial de la noticia para consultar la documentación técnica y referencias completas.",
+          `Desarrollo relevante de tecnología e ingeniería cubierto por ${sourceName}: "${cleanTitle}".`,
+          "Introduce mejoras prácticas en eficiencia operativa, arquitectura de sistemas y flujo de trabajo técnico.",
+          "Establece nuevos criterios de calidad, escalabilidad e integración con ecosistemas modernos.",
+          `Enlace directo verificado a ${sourceName} para revisar la documentación y el artículo íntegro.`,
         ];
 
-    const domainPointsEn = [
-      `Primary technical report verified via ${sourceName} with direct impact on the ${category} ecosystem.`,
-      "Highlights architectural trade-offs, performance benchmarks, and practical implementation guidelines.",
-      "Impacts developer workflows, production reliability, and medium-term technical strategy.",
-      `Open the direct link to ${sourceName} for primary documentation, metrics, and complete source context.`,
+    const specificPointsEn = [
+      `Primary technical coverage by ${sourceName} examining "${cleanTitle}".`,
+      "Highlights architectural trade-offs, workflow automation, and practical implementation patterns.",
+      "Impacts engineering productivity, system reliability, and technical roadmap decisions.",
+      `Direct link to ${sourceName} provided for full primary documentation and benchmarks.`,
     ];
 
-    const pool = isEs ? domainPointsEs : domainPointsEn;
+    const pool = isEs ? specificPointsEs : specificPointsEn;
     for (const pt of pool) {
       if (finalKeyPoints.length >= 4) break;
       if (!finalKeyPoints.includes(pt)) {
@@ -198,7 +288,7 @@ export function buildEditorialAnalysis(params: {
     }
   }
 
-  // 3. Build specific Advantages (Pros / Opportunities) & Disadvantages (Cons / Risks)
+  // 3. Build specific Advantages & Disadvantages
   let advantagesEs: string[];
   let disadvantagesEs: string[];
   let advantagesEn: string[];
@@ -206,152 +296,143 @@ export function buildEditorialAnalysis(params: {
 
   if (isCybersecurity) {
     advantagesEs = [
-      "Visibilidad temprana del vector de ataque para aplicar parches y reglas de detección antes de incidentes mayores.",
-      "Fortalecimiento de la postura de seguridad y concientización sobre vulnerabilidades críticas en producción.",
-      "Disponibilidad de trazabilidad técnica y recomendaciones de mitigación por parte de investigadores de seguridad.",
+      "Visibilidad temprana del fallo o amenaza para aplicar parches y reglas de detección antes de incidentes.",
+      "Fortalecimiento de la postura de seguridad (Zero Trust) y trazabilidad sobre componentes vulnerables.",
+      "Documentación de vectores de ataque que facilita la auditoría preventiva en infraestructuras similares.",
     ];
     disadvantagesEs = [
-      "Riesgo de explotación activa (Zero-Day / N-Day) en sistemas que no actualicen sus dependencias a tiempo.",
-      "Posible sobrecarga operativa temporal para equipos de DevSecOps durante la auditoría y despliegue de parches.",
-      "Impacto potencial en la continuidad del servicio si la mitigación requiere reinicios o cambios de configuración.",
+      "Riesgo de explotación activa en organizaciones que demoren la actualización de sistemas o dependencias.",
+      "Carga operativa adicional para equipos de SecOps y DevOps durante el despliegue urgente de mitigaciones.",
+      "Posible fricción o reinicio de servicios críticos al aplicar parches de seguridad de emergencia.",
     ];
     advantagesEn = [
-      "Early visibility into the attack vector to apply patches and detection rules before major incidents.",
-      "Strengthens security posture and awareness of critical production vulnerabilities.",
-      "Provides actionable technical traceability and mitigation guidance from security researchers.",
+      "Early visibility into the threat vector to apply patches and detection rules proactively.",
+      "Strengthens Zero Trust security posture and traceability across vulnerable components.",
+      "Actionable attack vector documentation that aids preventive auditing.",
     ];
     disadvantagesEn = [
-      "Risk of active exploitation on systems that delay dependency or firmware updates.",
-      "Temporary operational overhead for DevSecOps teams auditing and deploying hotfixes.",
-      "Potential service disruption if mitigation requires restarts or breaking configuration changes.",
+      "Active exploitation risk for organizations delaying dependency or system updates.",
+      "Operational overhead for SecOps and DevOps teams during emergency patch rollouts.",
+      "Potential service friction or downtime required to apply critical security mitigations.",
+    ];
+  } else if (isEnterpriseOrg) {
+    advantagesEs = [
+      "Aceleración drástica de flujos de trabajo complejos (análisis documental, código y operaciones) con mayor precisión.",
+      "Liberación de tiempo operativo para que los profesionales se concentren en estrategia, diseño y decisiones críticas.",
+      "Escalabilidad inmediata de procesos internos mediante sistemas agénticos integrados al flujo de la empresa.",
+    ];
+    disadvantagesEs = [
+      "Necesidad de rediseñar procesos internos, permisos y supervisión humana para evitar errores automatizados.",
+      "Retos de privacidad, cumplimiento normativo y gobernanza al procesar información corporativa sensible.",
+      "Resistencia cultural o curva de adaptación organizacional al integrar agentes de IA en el organigrama.",
+    ];
+    advantagesEn = [
+      "Drastic acceleration of complex workflows (document analysis, code, and operations) with high accuracy.",
+      "Frees up professional bandwidth to focus on high-value strategy and critical decision-making.",
+      "Immediate scalability of internal processes through integrated agentic workflows.",
+    ];
+    disadvantagesEn = [
+      "Requires redesigning internal workflows, permissions, and human-in-the-loop oversight.",
+      "Privacy, regulatory compliance, and data governance challenges with sensitive corporate data.",
+      "Organizational adaptation curve when integrating AI agents into team structures.",
     ];
   } else if (isModels) {
     advantagesEs = [
-      "Mayor capacidad de razonamiento técnico, generación de código y manejo de contextos extensos.",
-      "Reducción progresiva en los costos de inferencia por millón de tokens y menor latencia de respuesta.",
-      "Impulso a la competitividad entre modelos propietarios y de pesos abiertos en beneficio de los desarrolladores.",
+      "Mayor capacidad de razonamiento técnico, generación de código e interpretación de contextos extensos.",
+      "Optimización en la relación costo-rendimiento por millón de tokens y menor latencia de inferencia.",
+      "Impulso a nuevas arquitecturas de agentes autónomos y asistentes especializados de alta precisión.",
     ];
     disadvantagesEs = [
-      "Requerimientos elevados de memoria VRAM e infraestructura GPU para despliegues autoalojados.",
-      "Necesidad de validación rigurosa contra alucinaciones o regresiones al migrar prompts en producción.",
-      "Dependencia de límites de tasa (rate limits) o cambios de precios en proveedores de APIs externas.",
+      "Exigencia de evaluación rigurosa (evals) para prevenir alucinaciones o regresiones en producción.",
+      "Alto consumo de cómputo y memoria VRAM en caso de requerir despliegues locales o fine-tuning propio.",
+      "Dependencia de límites de cuota (rate limits) y políticas de precios de proveedores de modelos.",
     ];
     advantagesEn = [
-      "Higher technical reasoning capability, code generation accuracy, and long-context handling.",
-      "Progressive reduction in inference cost per million tokens and lower response latency.",
-      "Drives healthy competition between proprietary and open-weights models for developers.",
+      "Higher technical reasoning capability, code generation accuracy, and long-context comprehension.",
+      "Improved cost-to-performance ratio per million tokens and lower inference latency.",
+      "Enables more capable autonomous agent architectures and specialized technical assistants.",
     ];
     disadvantagesEn = [
-      "High VRAM and GPU infrastructure requirements for self-hosted deployments.",
-      "Requires strict evaluation against hallucinations or regressions when migrating production prompts.",
-      "Exposure to API rate limits or pricing changes when relying on external cloud providers.",
+      "Requires strict evaluation suites (evals) to prevent hallucinations or regressions in production.",
+      "High compute and VRAM footprint for self-hosted deployments or custom fine-tuning.",
+      "Exposure to API rate limits and vendor pricing shifts in cloud-hosted workflows.",
     ];
   } else if (isEmployability) {
     advantagesEs = [
-      "Apertura de nuevas oportunidades y roles especializados en IA, arquitectura cloud y seguridad.",
-      "Mayor valoración salarial para perfiles que combinan fundamentos sólidos de ingeniería con herramientas de IA.",
-      "Transparencia sobre hacia dónde se dirige la inversión de capital y la demanda real de talento tech.",
+      "Creación de roles de alto impacto en ingeniería de IA, arquitectura cloud, datos y ciberseguridad.",
+      "Prima salarial y competitiva para profesionales que dominan tanto fundamentos técnicos como herramientas de IA.",
+      "Claridad estratégica sobre qué habilidades y tecnologías concentran la inversión de la industria.",
     ];
     disadvantagesEs = [
-      "Mayor exigencia técnica en procesos de selección y menor oferta para roles puramente repetitivos.",
-      "Volatilidad en contrataciones dentro de empresas tecnológicas sujetas a ajustes trimestrales de mercado.",
-      "Necesidad de actualización continua (upskilling) para mantener competitividad profesional.",
+      "Mayor exigencia en entrevistas técnicas y reducción de vacantes centradas en tareas repetitivas.",
+      "Ciclos de ajuste y volatilidad en contrataciones dentro de grandes corporaciones tecnológicas.",
+      "Presión constante de actualización técnica (upskilling) para mantener relevancia en el mercado.",
     ];
     advantagesEn = [
-      "Creates new specialized roles in AI engineering, cloud architecture, and cybersecurity.",
-      "Higher compensation premium for engineers combining strong fundamentals with AI workflows.",
-      "Clearer market signals on where capital investment and hiring demand are heading.",
+      "Growth of high-impact roles in AI engineering, cloud architecture, data, and cybersecurity.",
+      "Compensation premium for engineers combining strong fundamentals with AI-native workflows.",
+      "Clear market visibility into which skills and stacks attract industry capital.",
     ];
     disadvantagesEn = [
-      "Higher technical bar in interviews and fewer openings for purely repetitive coding roles.",
-      "Hiring volatility across tech companies undergoing quarterly market adjustments.",
-      "Requires continuous upskilling to stay competitive in a rapidly evolving stack.",
-    ];
-  } else if (isAI) {
-    advantagesEs = [
-      "Automatización de tareas repetitivas de desarrollo, pruebas, análisis de datos y atención operativa.",
-      "Incremento medible en la velocidad de entrega de software y prototipado de nuevos productos.",
-      "Integración cada vez más fluida con repositorios, IDEs y flujos de trabajo empresariales.",
-    ];
-    disadvantagesEs = [
-      "Riesgos de privacidad, propiedad intelectual o fuga de datos si no se configuran políticas de seguridad.",
-      "Complejidad en la depuración y supervisión de agentes autónomos cuando encadenan múltiples acciones.",
-      "Costos acumulativos de consumo de API en aplicaciones de alto tráfico sin estrategias de caché.",
-    ];
-    advantagesEn = [
-      "Automates repetitive development, testing, data analysis, and operational workflows.",
-      "Measurable boost in software delivery speed and rapid product prototyping.",
-      "Increasingly seamless integration with repositories, IDEs, and enterprise pipelines.",
-    ];
-    disadvantagesEn = [
-      "Privacy, IP, or data leakage risks if enterprise governance policies are not enforced.",
-      "Debugging and monitoring complexity when autonomous agents chain multiple external actions.",
-      "Cumulative API token costs in high-traffic applications without caching strategies.",
+      "Higher bar in technical interviews and fewer openings for repetitive implementation tasks.",
+      "Hiring volatility during quarterly restructuring across large tech enterprises.",
+      "Continuous upskilling pressure required to stay competitive.",
     ];
   } else {
     advantagesEs = [
-      "Mejora en el rendimiento, mantenibilidad y estandarización de la arquitectura de software.",
-      "Respaldo de la comunidad técnica e integración con el ecosistema moderno de desarrollo.",
-      "Optimización de recursos de cómputo y reducción de fricción en el flujo de despliegue.",
+      "Incremento medible en productividad de desarrollo, mantenibilidad y velocidad de entrega de software.",
+      "Integración nativa con herramientas modernas, repositorios y flujos de despliegue continuo.",
+      "Estandarización de buenas prácticas técnicas respaldadas por líderes de la industria.",
     ];
     disadvantagesEs = [
-      "Curva de aprendizaje e inversión de tiempo inicial para migrar sistemas heredados (legacy).",
-      "Posibles incompatibilidades con librerías antiguas durante las primeras fases de adopción.",
-      "Requiere pruebas de integración exhaustivas antes de adoptarse en entornos críticos.",
+      "Curva de aprendizaje e inversión de ingeniería necesaria para adoptarlo en sistemas en producción.",
+      "Riesgo de acoplamiento tecnológico o costos acumulativos de consumo a gran escala.",
+      "Requiere validación exhaustiva de seguridad, rendimiento y observabilidad antes de su despliegue total.",
     ];
     advantagesEn = [
-      "Improves performance, maintainability, and standardization across software architectures.",
-      "Strong technical community backing and integration with modern development toolchains.",
-      "Optimizes compute resources and reduces friction in continuous deployment pipelines.",
+      "Measurable gains in developer productivity, maintainability, and software delivery speed.",
+      "Native integration with modern toolchains, repositories, and continuous deployment workflows.",
+      "Standardizes engineering best practices backed by industry leaders.",
     ];
     disadvantagesEn = [
-      "Initial learning curve and engineering time required to migrate legacy systems.",
-      "Potential compatibility friction with older libraries during early adoption phases.",
-      "Requires thorough integration testing before rollout to mission-critical environments.",
+      "Learning curve and engineering effort required to integrate into existing production systems.",
+      "Potential vendor lock-in or cumulative scaling costs under heavy workloads.",
+      "Requires thorough security, performance, and observability validation before full rollout.",
     ];
   }
 
   return {
+    cardLead,
     paragraphs,
     keyPoints: finalKeyPoints,
     advantages: isEs ? advantagesEs : advantagesEn,
     disadvantages: isEs ? disadvantagesEs : disadvantagesEn,
     domainTagEs: isCybersecurity
-      ? "Ciberseguridad & Infraestructura"
+      ? "Ciberseguridad & SecOps"
+      : isEnterpriseOrg
+      ? "IA Empresarial & Agentes"
       : isModels
-      ? "Modelos Fundacionales & Benchmarks"
+      ? "Modelos & Razonamiento"
       : isEmployability
-      ? "Mercado Laboral & Sector Tech"
+      ? "Mercado Laboral Tech"
       : isHardwareChips
-      ? "Semiconductores & Hardware"
+      ? "Hardware & Robótica"
       : isAI
-      ? "Inteligencia Artificial & Agentes"
-      : "Ingeniería de Software & Arquitectura",
+      ? "Inteligencia Artificial"
+      : "Ingeniería de Software",
     domainTagEn: isCybersecurity
-      ? "Cybersecurity & Infrastructure"
+      ? "Cybersecurity & SecOps"
+      : isEnterpriseOrg
+      ? "Enterprise AI & Agents"
       : isModels
-      ? "Foundation Models & Benchmarks"
+      ? "Models & Reasoning"
       : isEmployability
-      ? "Tech Job Market & Industry"
+      ? "Tech Job Market"
       : isHardwareChips
-      ? "Semiconductors & Hardware"
+      ? "Hardware & Robotics"
       : isAI
-      ? "Artificial Intelligence & Agents"
-      : "Software Engineering & Architecture",
-    impactScore: Math.min(99, Math.max(78, Math.round(relevanceScore * 100))),
+      ? "Artificial Intelligence"
+      : "Software Engineering",
+    impactScore: Math.min(99, Math.max(80, Math.round(relevanceScore * 100))),
   };
 }
-
-function getCategoryLabelEs(category: string): string {
-  switch (category) {
-    case "AI":
-      return "Inteligencia Artificial";
-    case "MODELS":
-      return "Modelos y Benchmarks";
-    case "EMPLOYABILITY":
-      return "Empleabilidad y Mercado Tech";
-    default:
-      return "Ingeniería de Software";
-  }
-}
-

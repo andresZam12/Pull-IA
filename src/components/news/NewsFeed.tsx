@@ -846,29 +846,28 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                       : summary?.summaryEn || summary?.summaryEs || "";
 
                   const title = cleanHtmlText(rawTitle);
-                  const cleanExcerpt = cleanHtmlText(rawSummary);
-                  const baseExcerpt =
-                    cleanExcerpt.length < 35 ||
-                    cleanExcerpt.toLowerCase() === title.toLowerCase()
-                      ? buildEditorialAnalysis({
-                          titleEs: summary?.titleEs || title,
-                          titleEn: summary?.titleEn || title,
-                          summaryEs: summary?.summaryEs || "",
-                          summaryEn: summary?.summaryEn || "",
-                          category: String(catKey),
-                          sourceName: article.sourceName,
-                          locale,
-                        }).paragraphs[1]
-                      : cleanExcerpt;
-                  const excerpt =
-                    baseExcerpt.split(". ").slice(0, 2).join(". ") +
-                    (baseExcerpt.endsWith(".") ? "" : ".");
+                  const analysis = buildEditorialAnalysis({
+                    titleEs: summary?.titleEs || title,
+                    titleEn: summary?.titleEn || title,
+                    summaryEs: summary?.summaryEs || rawSummary,
+                    summaryEn: summary?.summaryEn || rawSummary,
+                    category: String(catKey),
+                    sourceName: article.sourceName,
+                    keyPoints: summary?.keyPoints || [],
+                    relevanceScore: summary?.relevanceScore,
+                    locale,
+                  });
 
                   const storyNumber = String(index + 1).padStart(2, "0");
                   const timeLabel = formatRelativeTime(
                     article.publishedAt,
                     locale
                   );
+                  const domainLabel =
+                    locale === "es"
+                      ? analysis.domainTagEs
+                      : analysis.domainTagEn;
+                  const cardTakeaways = analysis.keyPoints.slice(0, 2);
 
                   return (
                     <article
@@ -891,7 +890,30 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
 
                       <div className="story-content">
                         <div className="story-topline">
-                          <span className="category">{categoryLabel}</span>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span className="category">{categoryLabel}</span>
+                            <span
+                              style={{
+                                fontSize: "9px",
+                                fontWeight: 800,
+                                textTransform: "uppercase",
+                                letterSpacing: ".08em",
+                                color: "#4e4942",
+                                padding: "2px 6px",
+                                border: "1px solid var(--line)",
+                                background: "rgba(248,244,236,.65)",
+                              }}
+                            >
+                              {domainLabel}
+                            </span>
+                          </div>
                           <span className="story-time">
                             <Clock3 size={13} />
                             {timeLabel}
@@ -899,17 +921,86 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                         </div>
 
                         <h3>{title}</h3>
-                        <p>{excerpt}</p>
+                        <p style={{ marginBottom: "14px" }}>
+                          {analysis.cardLead}
+                        </p>
 
-                        <div className="story-footer">
+                        {/* Compact Key Takeaways inside the Card so no card ever looks sparse */}
+                        <div
+                          style={{
+                            marginTop: "auto",
+                            marginBottom: "14px",
+                            padding: "10px 12px",
+                            background: "rgba(248, 244, 236, 0.58)",
+                            borderLeft: "2.5px solid var(--red)",
+                            borderTop: "1px solid rgba(25, 24, 23, 0.1)",
+                            borderRight: "1px solid rgba(25, 24, 23, 0.1)",
+                            borderBottom: "1px solid rgba(25, 24, 23, 0.1)",
+                            display: "grid",
+                            gap: "6px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "9px",
+                              fontWeight: 900,
+                              textTransform: "uppercase",
+                              letterSpacing: ".14em",
+                              color: "var(--red)",
+                            }}
+                          >
+                            {locale === "es"
+                              ? "Puntos clave · Resumen"
+                              : "Key Takeaways · Summary"}
+                          </span>
+                          {cardTakeaways.map((pt, ptIdx) => (
+                            <div
+                              key={ptIdx}
+                              style={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                gap: "6px",
+                                fontSize: "11.5px",
+                                lineHeight: 1.38,
+                                color: "#2d2a26",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color: "var(--red)",
+                                  fontWeight: 900,
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                ▪
+                              </span>
+                              <span>{pt}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="story-footer" style={{ marginTop: 0 }}>
                           <span>{article.sourceName}</span>
                           <div
                             style={{
                               display: "flex",
                               alignItems: "center",
-                              gap: "6px",
+                              gap: "8px",
                             }}
                           >
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                fontWeight: 900,
+                                textTransform: "uppercase",
+                                letterSpacing: ".08em",
+                                color: "var(--ink)",
+                              }}
+                            >
+                              {locale === "es"
+                                ? "Análisis y fuente"
+                                : "Analysis & source"}
+                            </span>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -919,8 +1010,8 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                               aria-label={`Leer ${title}`}
                               title={
                                 locale === "es"
-                                  ? "Leer resumen completo"
-                                  : "Read full summary"
+                                  ? "Leer resumen completo, ventajas/desventajas e ir a la fuente"
+                                  : "Read full summary, pros/cons and visit source"
                               }
                             >
                               <ArrowUpRight size={17} />
