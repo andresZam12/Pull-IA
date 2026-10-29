@@ -1,13 +1,20 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Navbar } from "@/components/ui/Navbar";
-import { NewsCard, type ArticleItem } from "@/components/news/NewsCard";
-import { ModelSpecCard } from "@/components/models/ModelSpecCard";
+import {
+  ArrowUpRight,
+  ChevronRight,
+  Clock3,
+  Menu,
+  RefreshCw,
+  X,
+} from "lucide-react";
+import { type ArticleItem } from "@/components/news/NewsCard";
 import { ArticleModal } from "@/components/news/ArticleModal";
-import { Footer } from "@/components/ui/Footer";
 import { useLanguage } from "@/context/LanguageContext";
 import { getArticleImage } from "@/lib/utils/images";
+import { cleanHtmlText } from "@/lib/utils/text";
+import { Category } from "@/types";
 
 interface NewsFeedProps {
   initialArticles: ArticleItem[];
@@ -48,13 +55,36 @@ interface GrpcStreamSummaryUI {
 
 const PAGE_SIZE = 12;
 
+const logoImage =
+  "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logg-oqkIXOIZABorpkRBo39sUEnZROXYxU.png";
+
+const FILTERS = [
+  { id: "ALL", labelEs: "Todas", labelEn: "All" },
+  { id: "AI", labelEs: "IA", labelEn: "AI" },
+  { id: "ENGINEERING", labelEs: "Ingeniería", labelEn: "Engineering" },
+  { id: "EMPLOYABILITY", labelEs: "Empleabilidad", labelEn: "Careers" },
+  { id: "MODELS", labelEs: "Modelos", labelEn: "Models" },
+] as const;
+
+const CATEGORY_DISPLAY_ES: Record<string, string> = {
+  AI: "IA",
+  ENGINEERING: "Ingeniería",
+  EMPLOYABILITY: "Empleabilidad",
+  MODELS: "Modelos",
+};
+
+const CATEGORY_DISPLAY_EN: Record<string, string> = {
+  AI: "AI",
+  ENGINEERING: "Engineering",
+  EMPLOYABILITY: "Employability",
+  MODELS: "Models",
+};
+
 /**
  * Precision section resolver: ensures strict, non-overlapping categorization
- * across [AI, ENGINEERING, MODELS, EMPLOYABILITY] based on structured metadata
- * and domain-specific taxonomy.
+ * across [AI, ENGINEERING, MODELS, EMPLOYABILITY].
  */
 function resolvePreciseCategory(article: ArticleItem): string {
-  // 1. Technical Spec Sheets always belong to MODELS
   if (article.aiModelSpec || article.summary?.category === "MODELS") {
     return "MODELS";
   }
@@ -62,22 +92,23 @@ function resolvePreciseCategory(article: ArticleItem): string {
   const text = `${article.summary?.titleEs ?? ""} ${article.summary?.titleEn ?? ""} ${article.summary?.summaryEs ?? ""} ${article.sourceName}`.toLowerCase();
   const dbCategory = article.summary?.category;
 
-  // 2. Strict EMPLOYABILITY detection (Tech Job Market, Salaries, Remote Work, Layoffs, Tech Stocks & Earnings)
   if (
     dbCategory === "EMPLOYABILITY" ||
-    /\b(empleabilidad|empleo|empleos|trabajo remoto|remoto|teletrabajo|salari|sueldo|contrataci|vacante|entrevista|despido|layoff|recorte de personal|bolsa|acciones|wall street|nasdaq|ingresos trimestrales|ganancias|adquisici|fusi[oó]n|ipo|mercado laboral|carrera|talento|reclutamiento|headhunter|cnbc)\b/i.test(text)
+    /\b(empleabilidad|empleo|empleos|trabajo remoto|remoto|teletrabajo|salari|sueldo|contrataci|vacante|entrevista|despido|layoff|recorte de personal|bolsa|acciones|wall street|nasdaq|ingresos trimestrales|ganancias|adquisici|fusi[oó]n|ipo|mercado laboral|carrera|talento|reclutamiento|headhunter|cnbc)\b/i.test(
+      text
+    )
   ) {
     return "EMPLOYABILITY";
   }
 
-  // 3. Strict MODELS detection (Foundation Model Releases, Benchmarks, Context Windows, Token Pricing, Weights)
   if (
-    /\b(gpt-[456]|claude 3|gemini [123]|llama [34]|deepseek-r|deepseek-v|mistral|qwen|mmlu|swe-bench|humaneval|ventana de contexto|context window|mill[oó]n de tokens|pesos abiertos|open weights|cuantizaci[oó]n|fine-tuning|ficha t[eé]cnica)\b/i.test(text)
+    /\b(gpt-[456]|claude 3|gemini [123]|llama [34]|deepseek-r|deepseek-v|mistral|qwen|mmlu|swe-bench|humaneval|ventana de contexto|context window|mill[oó]n de tokens|pesos abiertos|open weights|cuantizaci[oó]n|fine-tuning|ficha t[eé]cnica)\b/i.test(
+      text
+    )
   ) {
     return "MODELS";
   }
 
-  // 4. Strict ENGINEERING detection (Cybersecurity, CVEs, Cloud, DevOps, Software Architecture, Programming Languages)
   const engineeringSources = [
     "bleepingcomputer",
     "the hacker news",
@@ -89,21 +120,25 @@ function resolvePreciseCategory(article: ArticleItem): string {
     "arxiv cs.se",
   ];
   if (
-    engineeringSources.some((src) => article.sourceName.toLowerCase().includes(src)) ||
-    /\b(vulnerabilidad|cve-\d|ransomware|malware|phishing|exploit|zero-day|ciberseguridad|parche|botnet|backdoor|arquitectura de software|microservicios|kubernetes|docker|devops|aws|azure|linux|kernel|postgresql|base de datos|rust|python|typescript|php|golang|compilador|protocolo|cortafuegos|firewall|servidor)\b/i.test(text)
+    engineeringSources.some((src) =>
+      article.sourceName.toLowerCase().includes(src)
+    ) ||
+    /\b(vulnerabilidad|cve-\d|ransomware|malware|phishing|exploit|zero-day|ciberseguridad|parche|botnet|backdoor|arquitectura de software|microservicios|kubernetes|docker|devops|aws|azure|linux|kernel|postgresql|base de datos|rust|python|typescript|php|golang|compilador|protocolo|cortafuegos|firewall|servidor)\b/i.test(
+      text
+    )
   ) {
     return "ENGINEERING";
   }
 
-  // 5. Strict AI detection (Agents, Automation, Multimodal, Robotics, AI Research)
   if (
     dbCategory === "AI" &&
-    /\b(inteligencia artificial|agente|agentes|llm|neuronal|aprendizaje autom[aá]tico|machine learning|deep learning|generativ|openai|anthropic|huggingface|hugging face|rob[oó]tica|automatizaci[oó]n|rag|copiloto)\b/i.test(text)
+    /\b(inteligencia artificial|agente|agentes|llm|neuronal|aprendizaje autom[aá]tico|machine learning|deep learning|generativ|openai|anthropic|huggingface|hugging face|rob[oó]tica|automatizaci[oó]n|rag|copiloto)\b/i.test(
+      text
+    )
   ) {
     return "AI";
   }
 
-  // Map legacy PROGRAMMING into ENGINEERING
   if (dbCategory === "PROGRAMMING" || dbCategory === "ENGINEERING") {
     return "ENGINEERING";
   }
@@ -111,13 +146,36 @@ function resolvePreciseCategory(article: ArticleItem): string {
   return dbCategory || "ENGINEERING";
 }
 
+function formatRelativeTime(
+  publishedAt: Date | string | null,
+  locale: "es" | "en"
+): string {
+  if (!publishedAt) return locale === "es" ? "Reciente" : "Recent";
+  const pubTime = new Date(publishedAt).getTime();
+  if (Number.isNaN(pubTime)) return locale === "es" ? "Reciente" : "Recent";
+
+  const diffMin = Math.max(1, Math.floor((Date.now() - pubTime) / 60000));
+  if (diffMin < 60) {
+    return locale === "es" ? `Hace ${diffMin} min` : `${diffMin}m ago`;
+  }
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) {
+    return locale === "es" ? `Hace ${diffHours} h` : `${diffHours}h ago`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return locale === "es" ? `Hace ${diffDays} d` : `${diffDays}d ago`;
+}
+
 export function NewsFeed({ initialArticles }: NewsFeedProps) {
-  const { locale, t } = useLanguage();
+  const { locale, toggleLocale, t } = useLanguage();
   const [articles, setArticles] = useState<ArticleItem[]>(initialArticles);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string>("ALL");
   const [timeRange, setTimeRange] = useState<"7d" | "30d">("7d");
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
-  const [selectedArticle, setSelectedArticle] = useState<ArticleItem | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [selectedArticle, setSelectedArticle] = useState<ArticleItem | null>(
+    null
+  );
 
   // Live on-demand gRPC Server-Side Streaming sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -125,25 +183,30 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
     type: "info" | "success" | "error";
     message: string;
   } | null>(null);
-
   const [grpcFrames, setGrpcFrames] = useState<GrpcStreamFrameUI[]>([]);
-  const [grpcSummary, setGrpcSummary] = useState<GrpcStreamSummaryUI | null>(null);
+  const [grpcSummary, setGrpcSummary] = useState<GrpcStreamSummaryUI | null>(
+    null
+  );
   const [showGrpcPanel, setShowGrpcPanel] = useState(false);
   const [showProtoModal, setShowProtoModal] = useState(false);
 
-  // Sync state if initialArticles updates from SSR
+  // SoftStack Newsletter form state
+  const [email, setEmail] = useState("");
+  const [subStatus, setSubStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+  const [subMessage, setSubMessage] = useState("");
+
   useEffect(() => {
     if (initialArticles && initialArticles.length > 0) {
       setArticles(initialArticles);
     }
   }, [initialArticles]);
 
-  // Reset pagination batch to 12 whenever filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [selectedCategory, timeRange]);
+  }, [activeFilter, timeRange]);
 
-  // Auto-dismiss feedback banner after 10 seconds
   useEffect(() => {
     if (syncFeedback) {
       const timer = setTimeout(() => {
@@ -194,7 +257,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
             try {
               const parsed = JSON.parse(line);
               if (parsed.type === "GRPC_STREAM_FRAME" && parsed.frame) {
-                setGrpcFrames((prev) => [...prev.slice(-7), parsed.frame]);
+                setGrpcFrames((prev) => [...prev.slice(-6), parsed.frame]);
               } else if (parsed.type === "GRPC_STREAM_SUMMARY") {
                 setGrpcSummary({
                   totalProtobufBytes: parsed.totalProtobufBytes ?? 0,
@@ -229,14 +292,13 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                 }
               }
             } catch {
-              // Ignore partial line parse errors
+              // Ignore partial chunk JSON error
             }
           }
         }
         return;
       }
 
-      // Fallback to classic REST sync if streaming endpoint is not reachable
       let fallbackRes = await fetch("/api/articles/sync", {
         method: "POST",
       }).catch(() => null);
@@ -248,15 +310,13 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
         });
       }
 
-      if (!fallbackRes.ok) {
-        throw new Error(`Servidor respondió con código ${fallbackRes.status}`);
+      if (fallbackRes && fallbackRes.ok) {
+        const data = await fallbackRes.json();
+        setSyncFeedback({
+          type: data.newCount > 0 ? "success" : "info",
+          message: data.message || t.syncUpToDate,
+        });
       }
-
-      const data = await fallbackRes.json();
-      setSyncFeedback({
-        type: data.newCount > 0 ? "success" : "info",
-        message: data.message || t.syncUpToDate,
-      });
     } catch (err) {
       console.error("[NewsFeed] Error in gRPC live refresh:", err);
       setSyncFeedback({
@@ -268,16 +328,70 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
     }
   }, [isSyncing, t]);
 
-  // Filter articles smoothly in memory by strict category and time window (7d vs 30d)
+  // Handle SoftStack Newsletter Subscription (`POST /api/subscribe`)
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || subStatus === "loading") return;
+
+    setSubStatus("loading");
+    setSubMessage("");
+
+    try {
+      const backendUrl =
+        process.env.NEXT_PUBLIC_BACKEND_URL || "https://pull-ia-back.vercel.app";
+      const payload = JSON.stringify({
+        email: email.trim(),
+        locale,
+        interests: [
+          Category.AI,
+          Category.ENGINEERING,
+          Category.MODELS,
+          Category.EMPLOYABILITY,
+        ],
+      });
+
+      let res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).catch(() => null);
+
+      if (!res || !res.ok) {
+        res = await fetch(`${backendUrl}/api/subscribe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+        });
+      }
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSubStatus("success");
+        setSubMessage(
+          data.message ||
+            "¡Suscripción confirmada! Te enviamos la edición de esta semana a tu correo."
+        );
+        setEmail("");
+      } else {
+        setSubStatus("error");
+        setSubMessage(data.error || t.newsletter.error);
+      }
+    } catch {
+      setSubStatus("error");
+      setSubMessage(t.newsletter.error);
+    }
+  };
+
+  // Filter articles and guarantee unique, contextually accurate tech images
   const filteredArticles = useMemo(() => {
     const now = Date.now();
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
     const maxAgeMs = timeRange === "7d" ? sevenDaysMs : thirtyDaysMs;
-
     const usedImages = new Set<string>();
 
     return articles
+      .filter((a) => a.summary !== null)
       .map((article) => {
         const preciseCat = resolvePreciseCategory(article);
         const contextText = `${article.summary?.titleEs ?? ""} ${article.summary?.titleEn ?? ""} ${article.summary?.summaryEs ?? ""} ${article.sourceName}`;
@@ -298,15 +412,12 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
         };
       })
       .filter((article) => {
-        // 1. Strict Category filter
-        if (selectedCategory && selectedCategory !== "ALL") {
-          if (article.summary?.category !== selectedCategory) {
+        if (activeFilter !== "ALL") {
+          if (article.summary?.category !== activeFilter) {
             return false;
           }
         }
 
-        // 2. Time range filter (7d Hot Feed vs 30d Monthly Archive)
-        // Always allow AI Model Spec sheets so the Models catalog remains complete
         if (!article.aiModelSpec && article.publishedAt) {
           const pubTime = new Date(article.publishedAt).getTime();
           if (!Number.isNaN(pubTime) && now - pubTime > maxAgeMs) {
@@ -316,403 +427,698 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
 
         return true;
       });
-  }, [articles, selectedCategory, timeRange, locale]);
+  }, [articles, activeFilter, timeRange]);
 
-  // Slice articles into organized batches of 12 to avoid overwhelming the screen
   const visibleArticles = useMemo(() => {
     return filteredArticles.slice(0, visibleCount);
   }, [filteredArticles, visibleCount]);
 
   const latestFrame = grpcFrames[grpcFrames.length - 1];
-  const progressPercent = latestFrame
-    ? Math.min(
-        100,
-        Math.round((latestFrame.event.step / latestFrame.event.totalSteps) * 100)
-      )
-    : isSyncing
-    ? 15
-    : 100;
+
+  const todayFormatted = useMemo(() => {
+    return new Date().toLocaleDateString(
+      locale === "es" ? "es-CO" : "en-US",
+      {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }
+    );
+  }, [locale]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-indigo-500 selection:text-white">
-      {/* Navbar with Category & Global Language triggers */}
-      <Navbar
-        activeCategory={selectedCategory ?? "ALL"}
-        onSelectCategory={setSelectedCategory}
-      />
-
-      {/* Hero Section */}
-      <section className="relative overflow-hidden border-b border-zinc-800/80 bg-gradient-to-b from-indigo-950/25 via-zinc-950 to-zinc-950 px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-        <div className="mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-xs font-semibold text-violet-300 shadow-inner">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            {t.heroBadge}
-          </div>
-
-          <h1 className="mt-6 text-4xl font-black tracking-tight text-white sm:text-6xl sm:leading-none">
-            {t.heroTitlePrefix}
-            <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-300 bg-clip-text text-transparent">
-              {t.heroTitleHighlight}
+    <div className="site-shell">
+      {/* Masthead */}
+      <header className="masthead">
+        <div className="header-inner">
+          <a
+            href="#inicio"
+            onClick={() => setActiveFilter("ALL")}
+            className="brand"
+            aria-label="DeplHoy, inicio"
+          >
+            <span className="brand-crop">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoImage}
+                alt="Logotipo DeplHoy sobre periódico"
+              />
             </span>
-          </h1>
+            <span className="brand-name">DeplHoy</span>
+          </a>
 
-          <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">
-            {t.heroDescription}
-          </p>
-        </div>
-      </section>
-
-      {/* Main Content Area */}
-      <main className="mx-auto flex-1 max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        {/* Results Header with Category Label, Count, Time Filter & Live gRPC Refresh Button */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-white">
-              {selectedCategory && selectedCategory !== "ALL"
-                ? `${t.categoryPrefix} ${t.categories[selectedCategory as keyof typeof t.categories] || selectedCategory}`
-                : t.latestUpdates}
-            </h2>
-            <span className="rounded-full bg-zinc-800 px-3 py-0.5 text-xs font-bold text-zinc-300">
-              {visibleArticles.length} / {filteredArticles.length}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {selectedCategory && selectedCategory !== "ALL" && (
+          <nav
+            className={menuOpen ? "main-nav is-open" : "main-nav"}
+            aria-label="Secciones"
+          >
+            {FILTERS.map((filter) => (
               <button
-                onClick={() => setSelectedCategory(null)}
-                className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition"
+                key={filter.id}
+                className={
+                  activeFilter === filter.id ? "nav-link active" : "nav-link"
+                }
+                onClick={() => {
+                  setActiveFilter(filter.id);
+                  setMenuOpen(false);
+                }}
               >
-                {t.showAll}
+                {locale === "es" ? filter.labelEs : filter.labelEn}
               </button>
-            )}
+            ))}
+          </nav>
 
-            {/* 7-Day Hot Feed vs 30-Day Monthly Archive Filter */}
-            <div className="inline-flex items-center gap-1 rounded-xl border border-zinc-800/90 bg-zinc-900/80 p-1">
-              <button
-                type="button"
-                onClick={() => setTimeRange("7d")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                  timeRange === "7d"
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                <span>🔥</span>
-                <span>{t.filterRecent7d}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTimeRange("30d")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                  timeRange === "30d"
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                <span>📅</span>
-                <span>{t.filterArchive30d}</span>
-              </button>
-            </div>
-
-            {/* Live gRPC Refresh / Sync Button */}
+          <div className="header-actions">
             <button
-              onClick={handleRefresh}
-              disabled={isSyncing}
-              title="Ejecutar gRPC Server-Side Streaming (NewsPipelineService.StreamSyncProgress)"
-              className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 active:scale-95 px-3.5 py-1.5 text-xs font-semibold text-indigo-300 transition duration-150 hover:border-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+              className="language-button"
+              aria-label="Cambiar idioma"
+              onClick={toggleLocale}
             >
-              <svg
-                className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin text-indigo-400" : "text-indigo-300"}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              <span>{isSyncing ? t.refreshing : t.refreshButton}</span>
-              <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-cyan-300">
-                gRPC
+              <span className={locale === "es" ? "language-active" : ""}>
+                ES
               </span>
+              <span>/</span>
+              <span className={locale === "en" ? "language-active" : ""}>
+                EN
+              </span>
+            </button>
+
+            <a className="newsletter-button" href="#boletin">
+              {locale === "es" ? "Suscríbete" : "Subscribe"}{" "}
+              <ArrowUpRight size={15} />
+            </a>
+
+            <button
+              className="menu-button"
+              aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              {menuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         </div>
+      </header>
 
-        {/* gRPC Server-Side Streaming Live Console & Protobuf Telemetry Panel */}
-        {showGrpcPanel && (grpcFrames.length > 0 || isSyncing) && (
-          <div className="mb-6 overflow-hidden rounded-2xl border border-indigo-500/30 bg-zinc-900/90 shadow-xl">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-950/80 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    isSyncing
-                      ? "bg-cyan-400 animate-ping"
-                      : "bg-emerald-400"
-                  }`}
+      {/* Main Content */}
+      <main id="inicio">
+        {/* Editorial Hero Section */}
+        <section className="hero-section">
+          <div className="hero-kicker">
+            <span className="live-dot" />{" "}
+            {locale === "es"
+              ? "Las noticias de hoy, sin ruido"
+              : "Today's news, without the noise"}
+          </div>
+          <h1>
+            {locale === "es" ? (
+              <>
+                La información que
+                <br />
+                <em>mueve el futuro.</em>
+              </>
+            ) : (
+              <>
+                The information that
+                <br />
+                <em>moves the future.</em>
+              </>
+            )}
+          </h1>
+          <p className="hero-copy">
+            {locale === "es"
+              ? "Una mirada clara a la tecnología, la inteligencia artificial y las ideas que están cambiando el mundo."
+              : "A clear look at technology, artificial intelligence, and the ideas changing the world."}
+          </p>
+          <a href="#noticias" className="hero-cta">
+            {locale === "es" ? "Leer las noticias" : "Read the news"}{" "}
+            <ChevronRight size={17} />
+          </a>
+        </section>
+
+        {/* News Section */}
+        <section className="news-section" id="noticias">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">
+                {locale === "es"
+                  ? `Edición digital · ${todayFormatted}`
+                  : `Digital edition · ${todayFormatted}`}
+              </p>
+              <h2>
+                {locale === "es" ? "Últimas noticias" : "Latest news"}
+              </h2>
+            </div>
+
+            <div className="section-meta">
+              <span>
+                {String(filteredArticles.length).padStart(2, "0")}{" "}
+                {locale === "es" ? "historias" : "stories"}
+              </span>
+              <span className="rule" />
+              <span>
+                {isSyncing
+                  ? "Sincronizando vía gRPC..."
+                  : locale === "es"
+                  ? "Actualizado ahora"
+                  : "Updated just now"}
+              </span>
+            </div>
+          </div>
+
+          {/* Filter Bar + Time Window (7d/30d) + Live gRPC Sync Button */}
+          <div
+            className="filter-bar"
+            role="group"
+            aria-label="Filtrar noticias"
+          >
+            <div className="filter-group">
+              {FILTERS.map((filter) => (
+                <button
+                  key={filter.id}
+                  className={
+                    activeFilter === filter.id ? "filter active" : "filter"
+                  }
+                  onClick={() => setActiveFilter(filter.id)}
+                >
+                  {locale === "es" ? filter.labelEs : filter.labelEn}
+                </button>
+              ))}
+            </div>
+
+            <div className="filter-group">
+              <button
+                type="button"
+                className={timeRange === "7d" ? "filter active" : "filter"}
+                onClick={() => setTimeRange("7d")}
+              >
+                {locale === "es" ? "Recientes (7d)" : "Recent (7d)"}
+              </button>
+              <button
+                type="button"
+                className={timeRange === "30d" ? "filter active" : "filter"}
+                onClick={() => setTimeRange("30d")}
+              >
+                {locale === "es" ? "Archivo (30d)" : "Archive (30d)"}
+              </button>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isSyncing}
+                className="filter red-accent"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <RefreshCw
+                  size={13}
+                  className={isSyncing ? "animate-spin" : ""}
                 />
-                <span className="font-mono text-xs font-bold text-cyan-300">
-                  gRPC Server-Side Stream
+                <span>
+                  {isSyncing
+                    ? locale === "es"
+                      ? "Sincronizando gRPC..."
+                      : "Syncing gRPC..."
+                    : locale === "es"
+                    ? "Actualizar · gRPC"
+                    : "Refresh · gRPC"}
                 </span>
-                <span className="hidden sm:inline rounded bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-300">
-                  /pullia.pipeline.v1.NewsPipelineService/StreamSyncProgress
-                </span>
-              </div>
+              </button>
+            </div>
+          </div>
 
-              <div className="flex items-center gap-2">
-                {grpcSummary?.protoSchema && (
+          {/* Editorial gRPC Server-Side Streaming Live Console */}
+          {showGrpcPanel && (grpcFrames.length > 0 || isSyncing) && (
+            <div
+              style={{
+                marginTop: "20px",
+                background: "var(--paper-light)",
+                border: "2px solid var(--ink)",
+                boxShadow: "8px 8px 0 rgba(25,24,23,.22)",
+                padding: "18px 22px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                  borderBottom: "2px solid var(--ink)",
+                  paddingBottom: "10px",
+                  marginBottom: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <span className="live-dot" />
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 900,
+                      textTransform: "uppercase",
+                      letterSpacing: ".12em",
+                      color: "var(--red)",
+                    }}
+                  >
+                    gRPC Server-Side Stream · NewsPipelineService/StreamSyncProgress
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {grpcSummary?.protoSchema && (
+                    <button
+                      type="button"
+                      onClick={() => setShowProtoModal((prev) => !prev)}
+                      className="filter"
+                      style={{ padding: "5px 12px", fontSize: "10px" }}
+                    >
+                      {showProtoModal
+                        ? "Ocultar pullia.proto"
+                        : "Ver Contrato pullia.proto"}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setShowProtoModal((prev) => !prev)}
-                    className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-indigo-300 hover:bg-indigo-500/20 transition"
+                    onClick={() => setShowGrpcPanel(false)}
+                    className="icon-button"
+                    style={{ width: "26px", height: "26px" }}
+                    aria-label="Cerrar panel gRPC"
                   >
-                    {showProtoModal ? "Ocultar pullia.proto" : "Ver Contrato pullia.proto"}
+                    <X size={14} />
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowGrpcPanel(false)}
-                  className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white transition"
-                  aria-label="Cerrar consola gRPC"
-                >
-                  ✕
-                </button>
+                </div>
               </div>
-            </div>
 
-            {/* Progress Bar */}
-            <div className="h-1 w-full bg-zinc-800">
-              <div
-                className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-cyan-400 transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-
-            <div className="p-4">
-              {/* Streamed Events Log */}
-              <div className="space-y-1.5 font-mono text-xs">
+              <div style={{ display: "grid", gap: "6px" }}>
                 {grpcFrames.map((frame, idx) => (
                   <div
                     key={idx}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-950/60 px-3 py-1.5 border border-zinc-800/70"
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 10px",
+                      background: "var(--paper)",
+                      border: "1px solid var(--line)",
+                      fontFamily: "monospace",
+                      fontSize: "11px",
+                    }}
                   >
-                    <div className="flex items-center gap-2 text-zinc-200">
-                      <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-bold text-indigo-300">
-                        {frame.event.stageName}
-                      </span>
+                    <div>
+                      <strong style={{ color: "var(--red)" }}>
+                        [{frame.event.stageName}]
+                      </strong>{" "}
                       <span>{frame.event.message}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-[11px] text-zinc-400">
-                      <span className="text-emerald-400 font-semibold">
-                        Protobuf: {frame.protobufBytes}B
-                      </span>
-                      <span className="line-through text-zinc-500">
-                        JSON: {frame.jsonBytes}B
-                      </span>
-                      <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
-                        -{frame.savingsPercent}%
-                      </span>
+                    <div style={{ color: "var(--muted)", fontWeight: 700 }}>
+                      Protobuf: {frame.protobufBytes}B vs JSON:{" "}
+                      {frame.jsonBytes}B (-{frame.savingsPercent}%)
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Latest Binary Wire Frame Hex Preview + Summary Metrics */}
               {latestFrame && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/80 pt-3 font-mono text-[11px] text-zinc-400">
-                  <div className="truncate max-w-xl">
-                    <span className="text-zinc-500">Wire Frame (Hex): </span>
-                    <span className="text-cyan-300">{latestFrame.wireHexPreview}</span>
-                  </div>
+                <div
+                  style={{
+                    marginTop: "10px",
+                    paddingTop: "10px",
+                    borderTop: "1px solid var(--line)",
+                    display: "flex",
+                    flexWrap: "wrap",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                    fontFamily: "monospace",
+                    fontSize: "11px",
+                    color: "var(--muted)",
+                  }}
+                >
+                  <span>Wire Frame (Hex): {latestFrame.wireHexPreview}</span>
                   {grpcSummary && (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span>
-                        Total Protobuf:{" "}
-                        <strong className="text-emerald-400">
-                          {grpcSummary.totalProtobufBytes} bytes
-                        </strong>
-                      </span>
-                      <span>
-                        Total JSON:{" "}
-                        <strong className="text-zinc-300">
-                          {grpcSummary.totalJsonBytes} bytes
-                        </strong>
-                      </span>
-                      <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 font-bold text-emerald-300">
-                        ⚡ {grpcSummary.totalSavingsPercent}% menos ancho de banda con gRPC
-                      </span>
-                    </div>
+                    <strong style={{ color: "var(--ink)" }}>
+                      Total Protobuf: {grpcSummary.totalProtobufBytes}B vs JSON:{" "}
+                      {grpcSummary.totalJsonBytes}B (Ahorro:{" "}
+                      {grpcSummary.totalSavingsPercent}%)
+                    </strong>
                   )}
                 </div>
               )}
 
-              {/* Optional Collapsible `proto/pullia.proto` Viewer */}
               {showProtoModal && grpcSummary?.protoSchema && (
-                <pre className="mt-3 max-h-60 overflow-auto rounded-xl border border-zinc-800 bg-zinc-950 p-3 font-mono text-[11px] text-indigo-200">
+                <pre
+                  style={{
+                    marginTop: "12px",
+                    maxHeight: "220px",
+                    overflow: "auto",
+                    padding: "12px",
+                    background: "#191817",
+                    color: "#eee9df",
+                    fontSize: "11px",
+                  }}
+                >
                   {grpcSummary.protoSchema}
                 </pre>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Live Sync Status Feedback Banner */}
-        {syncFeedback && (
-          <div
-            role="status"
-            className={`mb-6 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-xs sm:text-sm font-medium shadow-lg transition-all animate-in fade-in slide-in-from-top-2 duration-300 ${
-              syncFeedback.type === "success"
-                ? "border-emerald-500/40 bg-emerald-950/40 text-emerald-200"
-                : syncFeedback.type === "error"
-                ? "border-amber-500/40 bg-amber-950/40 text-amber-200"
-                : "border-indigo-500/40 bg-indigo-950/40 text-indigo-200"
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              {syncFeedback.type === "success" ? (
-                <svg className="h-5 w-5 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : syncFeedback.type === "error" ? (
-                <svg className="h-5 w-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              ) : (
-                <svg className="h-5 w-5 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-              <span>{syncFeedback.message}</span>
-            </div>
-
-            <button
-              onClick={() => setSyncFeedback(null)}
-              className="text-zinc-400 hover:text-white transition p-1"
-              aria-label="Cerrar notificación"
+          {/* Sync Feedback Notice */}
+          {syncFeedback && (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "12px 18px",
+                background: "var(--paper-light)",
+                border: "1.5px solid var(--ink)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: "12px",
+                fontWeight: 800,
+              }}
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Visual Articles Grid (Capped to 12 per batch) */}
-        {visibleArticles.length > 0 ? (
-          <>
-            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleArticles.map((article) =>
-                article.aiModelSpec ? (
-                  <ModelSpecCard
-                    key={article.id}
-                    specs={article.aiModelSpec}
-                    articleUrl={article.url}
-                  />
-                ) : (
-                  <NewsCard
-                    key={article.id}
-                    article={article}
-                    onOpenModal={setSelectedArticle}
-                  />
-                )
-              )}
+              <span>{syncFeedback.message}</span>
+              <button
+                onClick={() => setSyncFeedback(null)}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  cursor: "pointer",
+                  fontWeight: 900,
+                }}
+              >
+                ✕
+              </button>
             </div>
+          )}
 
-            {/* Progressive Pagination & Monthly Retention Bar */}
-            <div className="mt-12 flex flex-col items-center justify-center gap-4 border-t border-zinc-800/80 pt-8 text-center">
-              <p className="text-xs font-medium text-zinc-400">
-                {t.showingCount}{" "}
-                <span className="font-bold text-white">{visibleArticles.length}</span>{" "}
-                {t.ofCount}{" "}
-                <span className="font-bold text-white">{filteredArticles.length}</span>{" "}
-                ({timeRange === "7d" ? t.filterRecent7d : t.filterArchive30d})
-              </p>
+          {/* Editorial Story Grid */}
+          {visibleArticles.length > 0 ? (
+            <>
+              <div className="story-grid">
+                {visibleArticles.map((article, index) => {
+                  const summary = article.summary;
+                  const catKey = summary?.category || "ENGINEERING";
+                  const categoryLabel =
+                    locale === "es"
+                      ? CATEGORY_DISPLAY_ES[catKey] || catKey
+                      : CATEGORY_DISPLAY_EN[catKey] || catKey;
 
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                {visibleCount < filteredArticles.length && (
-                  <button
-                    type="button"
-                    onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-indigo-500/40 bg-indigo-600/20 hover:bg-indigo-600/30 px-6 py-2.5 text-xs font-bold text-indigo-200 transition shadow-sm"
-                  >
-                    <span>{t.loadMore} (+{Math.min(PAGE_SIZE, filteredArticles.length - visibleCount)})</span>
-                  </button>
-                )}
+                  const rawTitle =
+                    locale === "es"
+                      ? summary?.titleEs || ""
+                      : summary?.titleEn || summary?.titleEs || "";
+                  const rawSummary =
+                    locale === "es"
+                      ? summary?.summaryEs || ""
+                      : summary?.summaryEn || summary?.summaryEs || "";
 
-                {visibleCount > PAGE_SIZE && (
-                  <button
-                    type="button"
-                    onClick={() => setVisibleCount(PAGE_SIZE)}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 px-5 py-2.5 text-xs font-semibold text-zinc-300 transition"
-                  >
-                    <span>{t.showLess}</span>
-                  </button>
-                )}
+                  const title = cleanHtmlText(rawTitle);
+                  const cleanExcerpt = cleanHtmlText(rawSummary);
+                  const excerpt =
+                    cleanExcerpt.split(". ").slice(0, 2).join(". ") +
+                    (cleanExcerpt.endsWith(".") ? "" : ".");
 
-                {timeRange === "7d" && (
-                  <button
-                    type="button"
-                    onClick={() => setTimeRange("30d")}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/80 hover:border-indigo-500/40 hover:text-indigo-300 px-5 py-2.5 text-xs font-semibold text-zinc-400 transition"
-                  >
-                    <span>📅</span>
-                    <span>{t.searchInArchiveCta}</span>
-                  </button>
-                )}
+                  const storyNumber = String(index + 1).padStart(2, "0");
+                  const timeLabel = formatRelativeTime(
+                    article.publishedAt,
+                    locale
+                  );
+
+                  return (
+                    <article
+                      className={
+                        index === 0 ? "story-card featured" : "story-card"
+                      }
+                      key={article.id}
+                      onClick={() => setSelectedArticle(article)}
+                    >
+                      <div className="story-image-wrap">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={article.imageUrl || ""}
+                          alt={title}
+                          className="story-image"
+                          loading="lazy"
+                        />
+                        <span className="story-number">{storyNumber}</span>
+                      </div>
+
+                      <div className="story-content">
+                        <div className="story-topline">
+                          <span className="category">{categoryLabel}</span>
+                          <span className="story-time">
+                            <Clock3 size={13} />
+                            {timeLabel}
+                          </span>
+                        </div>
+
+                        <h3>{title}</h3>
+                        <p>{excerpt}</p>
+
+                        <div className="story-footer">
+                          <span>{article.sourceName}</span>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedArticle(article);
+                              }}
+                              aria-label={`Leer ${title}`}
+                              title={
+                                locale === "es"
+                                  ? "Leer resumen completo"
+                                  : "Read full summary"
+                              }
+                            >
+                              <ArrowUpRight size={17} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
 
-              <p className="text-[11px] text-zinc-500">
-                {t.retentionNotice}
-              </p>
-            </div>
-          </>
-        ) : (
-          <div className="rounded-3xl border border-dashed border-zinc-800 py-20 text-center">
-            <svg
-              className="mx-auto h-12 w-12 text-zinc-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
-              />
-            </svg>
-            <h3 className="mt-4 text-base font-bold text-white">
-              {t.noArticlesFound}
-            </h3>
-            <p className="mt-1 text-xs text-zinc-500">
-              {t.noArticlesDesc}
-            </p>
-            {timeRange === "7d" && (
-              <button
-                type="button"
-                onClick={() => setTimeRange("30d")}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 px-4 py-2 text-xs font-semibold text-indigo-300 transition"
+              {/* Progressive Pagination Controls */}
+              <div
+                style={{
+                  marginTop: "36px",
+                  paddingTop: "24px",
+                  borderTop: "3px double var(--ink)",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "16px",
+                }}
               >
-                <span>📅</span>
-                <span>{t.searchInArchiveCta}</span>
-              </button>
-            )}
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    textTransform: "uppercase",
+                    letterSpacing: ".08em",
+                    color: "var(--muted)",
+                  }}
+                >
+                  {t.showingCount} {visibleArticles.length} {t.ofCount}{" "}
+                  {filteredArticles.length} (
+                  {timeRange === "7d" ? t.filterRecent7d : t.filterArchive30d})
+                </span>
+
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  {visibleCount < filteredArticles.length && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVisibleCount((prev) => prev + PAGE_SIZE)
+                      }
+                      className="filter active"
+                    >
+                      {t.loadMore} (+
+                      {Math.min(
+                        PAGE_SIZE,
+                        filteredArticles.length - visibleCount
+                      )}
+                      )
+                    </button>
+                  )}
+
+                  {visibleCount > PAGE_SIZE && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCount(PAGE_SIZE)}
+                      className="filter"
+                    >
+                      {t.showLess}
+                    </button>
+                  )}
+
+                  {timeRange === "7d" && (
+                    <button
+                      type="button"
+                      onClick={() => setTimeRange("30d")}
+                      className="filter"
+                    >
+                      {t.searchInArchiveCta}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div
+              style={{
+                marginTop: "28px",
+                padding: "64px 24px",
+                textAlign: "center",
+                border: "1px solid var(--line)",
+                background: "rgba(248,244,236,.6)",
+              }}
+            >
+              <h3
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontSize: "28px",
+                  margin: "0 0 8px",
+                }}
+              >
+                {t.noArticlesFound}
+              </h3>
+              <p
+                style={{
+                  color: "var(--muted)",
+                  fontSize: "13px",
+                  marginBottom: "18px",
+                }}
+              >
+                {t.noArticlesDesc}
+              </p>
+              {timeRange === "7d" && (
+                <button
+                  type="button"
+                  onClick={() => setTimeRange("30d")}
+                  className="filter active"
+                >
+                  {t.searchInArchiveCta}
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* SoftStack Red Editorial Newsletter Panel */}
+        <section className="newsletter-panel" id="boletin">
+          <div>
+            <p className="eyebrow">
+              {locale === "es"
+                ? "El resumen de la semana"
+                : "The weekly digest"}
+            </p>
+            <h2>
+              {locale === "es" ? (
+                <>
+                  Tu semana empieza aquí,
+                  <br />
+                  únete a mi SoftStack.
+                </>
+              ) : (
+                <>
+                  Your week starts here,
+                  <br />
+                  join my SoftStack.
+                </>
+              )}
+            </h2>
+            <p className="newsletter-lead">
+              {locale === "es" ? (
+                <>
+                  Las noticias tech que importan, resumidas y en tu correo cada
+                  lunes a las <strong>8:00 AM</strong>.
+                </>
+              ) : (
+                <>
+                  The tech news that matters, summarized in your inbox every
+                  Monday at <strong>8:00 AM</strong>.
+                </>
+              )}
+            </p>
+            <p className="newsletter-note">
+              {locale === "es"
+                ? "Sin ruido. Sin spam. Solo una selección inteligente de lo que está moviendo el mundo."
+                : "No noise. No spam. Just a smart selection of what is moving the world."}
+            </p>
           </div>
-        )}
+
+          <form className="signup-form" onSubmit={handleSubscribe}>
+            <label className="sr-only" htmlFor="email">
+              Tu correo electrónico
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tu@email.com"
+              required
+            />
+            <button type="submit" disabled={subStatus === "loading"}>
+              {subStatus === "loading"
+                ? locale === "es"
+                  ? "Enviando..."
+                  : "Sending..."
+                : locale === "es"
+                ? "Quiero SoftStack"
+                : "Join SoftStack"}{" "}
+              <ArrowUpRight size={15} />
+            </button>
+            <span className="form-note">
+              {subMessage
+                ? subMessage
+                : locale === "es"
+                ? "Gratis · Directo a tu inbox"
+                : "Free · Straight to your inbox"}
+            </span>
+          </form>
+        </section>
       </main>
 
-      {/* Floating Detailed Article Modal / Giant Card */}
+      {/* Editorial Article Modal */}
       <ArticleModal
         article={selectedArticle}
         onClose={() => setSelectedArticle(null)}
       />
 
       {/* Footer */}
-      <Footer />
+      <footer className="footer">
+        <span>© 2026 DeplHoy</span>
+        <span>
+          {locale === "es"
+            ? "Hecho para quienes construyen lo que viene."
+            : "Built for those who build what's next."}
+        </span>
+        <a href="#inicio">
+          {locale === "es" ? "Volver arriba ↑" : "Back to top ↑"}
+        </a>
+      </footer>
     </div>
   );
 }

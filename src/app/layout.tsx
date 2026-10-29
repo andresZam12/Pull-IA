@@ -1,21 +1,11 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Deplhoy — Noticias Tech e Inteligencia para Desarrolladores",
+  title: "DeplHoy — La información que mueve el futuro",
   description:
-    "El pulso diario sobre IA, ingeniería de software, modelos y empleabilidad. Resúmenes bilingües con IA impulsados por la arquitectura PULL-IA.",
+    "Noticias claras sobre tecnología, inteligencia artificial e ideas que están cambiando el mundo.",
+  generator: "DeplHoy",
   icons: {
     icon: [
       { url: "/deplhoy-logo.png?v=3", sizes: "32x32", type: "image/png" },
@@ -30,19 +20,20 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#f4f1eb",
+  userScalable: true,
+};
+
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html
-      lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
-    >
-      <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
-        {children}
-      </body>
+    <html lang="es">
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
