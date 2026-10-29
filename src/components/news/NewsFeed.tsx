@@ -12,6 +12,39 @@ interface NewsFeedProps {
   initialArticles: ArticleItem[];
 }
 
+interface GrpcStreamFrameUI {
+  event: {
+    step: number;
+    totalSteps: number;
+    stage: number;
+    stageName: string;
+    message: string;
+    sourceName?: string;
+    articleTitle?: string;
+    assignedCategory?: string;
+    fetchedCount?: number;
+    newCandidates?: number;
+    publishedCount?: number;
+    purgedCount?: number;
+    elapsedMs: number;
+  };
+  grpcMethod: string;
+  protobufBytes: number;
+  jsonBytes: number;
+  savingsPercent: number;
+  wireHexPreview: string;
+}
+
+interface GrpcStreamSummaryUI {
+  totalProtobufBytes: number;
+  totalJsonBytes: number;
+  totalSavingsPercent: number;
+  durationMs: number;
+  fetchedCount: number;
+  newCount: number;
+  protoSchema?: string;
+}
+
 const PAGE_SIZE = 12;
 
 /**
@@ -31,7 +64,7 @@ function resolvePreciseCategory(article: ArticleItem): string {
   // 2. Strict EMPLOYABILITY detection (Tech Job Market, Salaries, Remote Work, Layoffs, Tech Stocks & Earnings)
   if (
     dbCategory === "EMPLOYABILITY" ||
-    /\b(empleabilidad|empleo|empleos|trabajo remoto|remoto|teletrabajo|salari|sueldo|contrataci|vacante|entrevista|despido|layoff|recorte de personal|bolsa|acciones|wall street|nasdaq|ingresos trimestrales| ganancias|adquisici|fusi[oó]n|ipo|mercado laboral|carrera|talento|reclutamiento|headhunter|cnbc)\b/i.test(text)
+    /\b(empleabilidad|empleo|empleos|trabajo remoto|remoto|teletrabajo|salari|sueldo|contrataci|vacante|entrevista|despido|layoff|recorte de personal|bolsa|acciones|wall street|nasdaq|ingresos trimestrales|ganancias|adquisici|fusi[oó]n|ipo|mercado laboral|carrera|talento|reclutamiento|headhunter|cnbc)\b/i.test(text)
   ) {
     return "EMPLOYABILITY";
   }
@@ -85,12 +118,17 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [selectedArticle, setSelectedArticle] = useState<ArticleItem | null>(null);
 
-  // Live on-demand sync state
+  // Live on-demand gRPC Server-Side Streaming sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{
     type: "info" | "success" | "error";
     message: string;
   } | null>(null);
+
+  const [grpcFrames, setGrpcFrames] = useState<GrpcStreamFrameUI[]>([]);
+  const [grpcSummary, setGrpcSummary] = useState<GrpcStreamSummaryUI | null>(null);
+  const [showGrpcPanel, setShowGrpcPanel] = useState(false);
+  const [showProtoModal, setShowProtoModal] = useState(false);
 
   // Sync state if initialArticles updates from SSR
   useEffect(() => {
@@ -104,74 +142,122 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
     setVisibleCount(PAGE_SIZE);
   }, [selectedCategory, timeRange]);
 
-  // Auto-dismiss feedback banner after 8 seconds
+  // Auto-dismiss feedback banner after 10 seconds
   useEffect(() => {
     if (syncFeedback) {
       const timer = setTimeout(() => {
         setSyncFeedback(null);
-      }, 8000);
+      }, 10000);
       return () => clearTimeout(timer);
     }
   }, [syncFeedback]);
 
-  // Handle on-demand news search across all verified RSS sources
+  // Handle on-demand news search via gRPC Server-Side Streaming (`NewsPipelineService.StreamSyncProgress`)
   const handleRefresh = useCallback(async () => {
     if (isSyncing) return;
     setIsSyncing(true);
     setSyncFeedback(null);
+    setGrpcFrames([]);
+    setGrpcSummary(null);
+    setShowGrpcPanel(true);
+
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL || "https://pull-ia-back.vercel.app";
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://pull-ia-back.vercel.app";
+      let res = await fetch("/api/grpc/sync-stream", {
+        method: "POST",
+      }).catch(() => null);
 
-      // Attempt local route first if running unified or proxy, fallback to backend URL
-      let res = await fetch("/api/articles/sync", { method: "POST" }).catch(() => null);
+      if (!res || !res.ok || !res.body) {
+        res = await fetch(`${backendUrl}/api/grpc/sync-stream`, {
+          method: "POST",
+        }).catch(() => null);
+      }
 
-      if (!res || !res.ok) {
-        res = await fetch(`${backendUrl}/api/articles/sync`, {
+      if (res && res.ok && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.type === "GRPC_STREAM_FRAME" && parsed.frame) {
+                setGrpcFrames((prev) => [...prev.slice(-7), parsed.frame]);
+              } else if (parsed.type === "GRPC_STREAM_SUMMARY") {
+                setGrpcSummary({
+                  totalProtobufBytes: parsed.totalProtobufBytes ?? 0,
+                  totalJsonBytes: parsed.totalJsonBytes ?? 0,
+                  totalSavingsPercent: parsed.totalSavingsPercent ?? 0,
+                  durationMs: parsed.durationMs ?? 0,
+                  fetchedCount: parsed.fetchedCount ?? 0,
+                  newCount: parsed.newCount ?? 0,
+                  protoSchema: parsed.protoSchema,
+                });
+
+                setSyncFeedback({
+                  type: parsed.newCount > 0 ? "success" : "info",
+                  message: parsed.message || t.syncUpToDate,
+                });
+
+                if (parsed.newCount > 0) {
+                  const fetchRes = await fetch(
+                    `/api/articles?days=30&limit=100`
+                  ).catch(() =>
+                    fetch(`${backendUrl}/api/articles?days=30&limit=100`)
+                  );
+                  if (fetchRes && fetchRes.ok) {
+                    const freshData = await fetchRes.json();
+                    if (
+                      freshData.success &&
+                      Array.isArray(freshData.articles)
+                    ) {
+                      setArticles(freshData.articles);
+                    }
+                  }
+                }
+              }
+            } catch {
+              // Ignore partial line parse errors
+            }
+          }
+        }
+        return;
+      }
+
+      // Fallback to classic REST sync if streaming endpoint is not reachable
+      let fallbackRes = await fetch("/api/articles/sync", {
+        method: "POST",
+      }).catch(() => null);
+
+      if (!fallbackRes || !fallbackRes.ok) {
+        fallbackRes = await fetch(`${backendUrl}/api/articles/sync`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
       }
 
-      if (!res.ok) {
-        throw new Error(`Servidor respondió con código ${res.status}`);
+      if (!fallbackRes.ok) {
+        throw new Error(`Servidor respondió con código ${fallbackRes.status}`);
       }
 
-      const data = await res.json();
-
-      if (data.success) {
-        if (data.newCount > 0) {
-          setSyncFeedback({
-            type: "success",
-            message: data.message || t.syncSuccess,
-          });
-
-          // Fetch fresh articles directly to render them without page reload
-          try {
-            const fetchRes = await fetch(`${backendUrl}/api/articles?days=30&limit=100`);
-            if (fetchRes.ok) {
-              const freshData = await fetchRes.json();
-              if (freshData.success && Array.isArray(freshData.articles)) {
-                setArticles(freshData.articles);
-              }
-            }
-          } catch (fetchErr) {
-            console.warn("[NewsFeed] Could not auto-refresh article cards:", fetchErr);
-          }
-        } else {
-          setSyncFeedback({
-            type: "info",
-            message: data.message || t.syncUpToDate,
-          });
-        }
-      } else {
-        setSyncFeedback({
-          type: "error",
-          message: data.message || t.syncError,
-        });
-      }
+      const data = await fallbackRes.json();
+      setSyncFeedback({
+        type: data.newCount > 0 ? "success" : "info",
+        message: data.message || t.syncUpToDate,
+      });
     } catch (err) {
-      console.error("[NewsFeed] Error in live refresh:", err);
+      console.error("[NewsFeed] Error in gRPC live refresh:", err);
       setSyncFeedback({
         type: "info",
         message: t.syncUpToDate,
@@ -224,6 +310,16 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
     return filteredArticles.slice(0, visibleCount);
   }, [filteredArticles, visibleCount]);
 
+  const latestFrame = grpcFrames[grpcFrames.length - 1];
+  const progressPercent = latestFrame
+    ? Math.min(
+        100,
+        Math.round((latestFrame.event.step / latestFrame.event.totalSteps) * 100)
+      )
+    : isSyncing
+    ? 15
+    : 100;
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-indigo-500 selection:text-white">
       {/* Navbar with Category & Global Language triggers */}
@@ -255,8 +351,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
 
       {/* Main Content Area */}
       <main className="mx-auto flex-1 max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        
-        {/* Results Header with Category Label, Count, Time Filter & Live Refresh Button */}
+        {/* Results Header with Category Label, Count, Time Filter & Live gRPC Refresh Button */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-white">
@@ -307,11 +402,11 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
               </button>
             </div>
 
-            {/* Live Refresh / Sync Button */}
+            {/* Live gRPC Refresh / Sync Button */}
             <button
               onClick={handleRefresh}
               disabled={isSyncing}
-              title="Consultar fuentes oficiales globales en busca de nuevas noticias"
+              title="Ejecutar gRPC Server-Side Streaming (NewsPipelineService.StreamSyncProgress)"
               className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 active:scale-95 px-3.5 py-1.5 text-xs font-semibold text-indigo-300 transition duration-150 hover:border-indigo-500/60 disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
             >
               <svg
@@ -328,9 +423,129 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                 />
               </svg>
               <span>{isSyncing ? t.refreshing : t.refreshButton}</span>
+              <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-cyan-300">
+                gRPC
+              </span>
             </button>
           </div>
         </div>
+
+        {/* gRPC Server-Side Streaming Live Console & Protobuf Telemetry Panel */}
+        {showGrpcPanel && (grpcFrames.length > 0 || isSyncing) && (
+          <div className="mb-6 overflow-hidden rounded-2xl border border-indigo-500/30 bg-zinc-900/90 shadow-xl">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-950/80 px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    isSyncing
+                      ? "bg-cyan-400 animate-ping"
+                      : "bg-emerald-400"
+                  }`}
+                />
+                <span className="font-mono text-xs font-bold text-cyan-300">
+                  gRPC Server-Side Stream
+                </span>
+                <span className="hidden sm:inline rounded bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-300">
+                  /pullia.pipeline.v1.NewsPipelineService/StreamSyncProgress
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {grpcSummary?.protoSchema && (
+                  <button
+                    type="button"
+                    onClick={() => setShowProtoModal((prev) => !prev)}
+                    className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-indigo-300 hover:bg-indigo-500/20 transition"
+                  >
+                    {showProtoModal ? "Ocultar pullia.proto" : "Ver Contrato pullia.proto"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowGrpcPanel(false)}
+                  className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white transition"
+                  aria-label="Cerrar consola gRPC"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="h-1 w-full bg-zinc-800">
+              <div
+                className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-cyan-400 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+
+            <div className="p-4">
+              {/* Streamed Events Log */}
+              <div className="space-y-1.5 font-mono text-xs">
+                {grpcFrames.map((frame, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-950/60 px-3 py-1.5 border border-zinc-800/70"
+                  >
+                    <div className="flex items-center gap-2 text-zinc-200">
+                      <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-bold text-indigo-300">
+                        {frame.event.stageName}
+                      </span>
+                      <span>{frame.event.message}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+                      <span className="text-emerald-400 font-semibold">
+                        Protobuf: {frame.protobufBytes}B
+                      </span>
+                      <span className="line-through text-zinc-500">
+                        JSON: {frame.jsonBytes}B
+                      </span>
+                      <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                        -{frame.savingsPercent}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Latest Binary Wire Frame Hex Preview + Summary Metrics */}
+              {latestFrame && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800/80 pt-3 font-mono text-[11px] text-zinc-400">
+                  <div className="truncate max-w-xl">
+                    <span className="text-zinc-500">Wire Frame (Hex): </span>
+                    <span className="text-cyan-300">{latestFrame.wireHexPreview}</span>
+                  </div>
+                  {grpcSummary && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span>
+                        Total Protobuf:{" "}
+                        <strong className="text-emerald-400">
+                          {grpcSummary.totalProtobufBytes} bytes
+                        </strong>
+                      </span>
+                      <span>
+                        Total JSON:{" "}
+                        <strong className="text-zinc-300">
+                          {grpcSummary.totalJsonBytes} bytes
+                        </strong>
+                      </span>
+                      <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 font-bold text-emerald-300">
+                        ⚡ {grpcSummary.totalSavingsPercent}% menos ancho de banda con gRPC
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Optional Collapsible `proto/pullia.proto` Viewer */}
+              {showProtoModal && grpcSummary?.protoSchema && (
+                <pre className="mt-3 max-h-60 overflow-auto rounded-xl border border-zinc-800 bg-zinc-950 p-3 font-mono text-[11px] text-indigo-200">
+                  {grpcSummary.protoSchema}
+                </pre>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Live Sync Status Feedback Banner */}
         {syncFeedback && (

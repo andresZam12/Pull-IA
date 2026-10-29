@@ -2,13 +2,15 @@
  * PULL-IA — Ingestion Pipeline Orchestrator
  *
  * Coordinates the full pipeline:
- * 1. FETCH    → get articles from all sources
- * 2. DEDUPE   → skip already-seen URLs (hash-based)
- * 3. CLASSIFY → AI categorization + scoring
+ * 1. FETCH     → get articles from all sources
+ * 2. DEDUPE    → skip already-seen URLs (hash-based)
+ * 3. CLASSIFY  → AI categorization + scoring
  * 4. SUMMARIZE → AI bilingual summaries
- * 5. PUBLISH  → save to database
+ * 5. PUBLISH   → save to database
+ * 6. RETENTION → 30-day window & 150-article cap
  *
- * Designed to run as a Vercel Cron job every 2 hours.
+ * Supports gRPC Server-Side Streaming (`StreamSyncProgress`) via optional
+ * `onProgress` callback while remaining 100% backwards-compatible.
  */
 
 import { createHash } from "crypto";
@@ -18,12 +20,20 @@ import { ArticleClassifier } from "@/lib/ai/classifier";
 import { ArticleSummarizer } from "@/lib/ai/summarizer";
 import type { RawArticle, PipelineResult, PipelineError } from "@/types";
 import { ArticleStatus } from "@/types";
+import {
+  SyncStageEnum,
+  type SyncProgressEventPayload,
+} from "@/lib/grpc/proto-schema";
 
 const FINAL_SCORE_WEIGHTS = {
   relevance: 0.5,  // AI relevance score
   reputation: 0.3, // Source reputation score
   freshness: 0.2,  // Recency bonus
 };
+
+export type PipelineProgressCallback = (
+  event: SyncProgressEventPayload
+) => void | Promise<void>;
 
 export class IngestionPipeline {
   private classifier = new ArticleClassifier();
@@ -32,19 +42,60 @@ export class IngestionPipeline {
 
   /**
    * Run the full ingestion pipeline.
-   * Returns a summary of what happened.
+   * Emits real-time gRPC `SyncProgressEvent` messages when `onProgress` is provided.
    */
-  async run(maxBatch = 3): Promise<PipelineResult> {
+  async run(
+    maxBatch = 3,
+    onProgress?: PipelineProgressCallback
+  ): Promise<PipelineResult> {
     const startTime = Date.now();
+    const totalSteps = 5;
     console.log("[Pipeline] Starting ingestion run...");
 
-    // Step 1: Fetch from all sources in parallel
-    const rawArticles = await this.fetchAll();
+    const emit = async (
+      partial: Omit<SyncProgressEventPayload, "totalSteps" | "elapsedMs">
+    ) => {
+      if (!onProgress) return;
+      await onProgress({
+        ...partial,
+        totalSteps,
+        elapsedMs: Date.now() - startTime,
+      });
+    };
+
+    await emit({
+      step: 1,
+      stage: SyncStageEnum.STAGE_INIT,
+      stageName: "STAGE_INIT",
+      message:
+        "Iniciando canal gRPC Server-Side Streaming (NewsPipelineService.StreamSyncProgress)...",
+    });
+
+    // Step 1: Fetch from all sources in parallel (with per-source streaming events)
+    const rawArticles = await this.fetchAll(async (sourceName, countSoFar) => {
+      await emit({
+        step: 2,
+        stage: SyncStageEnum.STAGE_FETCHING,
+        stageName: "STAGE_FETCHING",
+        sourceName,
+        fetchedCount: countSoFar,
+        message: `Fuente sincronizada vía gRPC: ${sourceName} (${countSoFar} artículos recolectados)`,
+      });
+    });
     console.log(`[Pipeline] Fetched ${rawArticles.length} raw articles`);
 
     // Step 2: Deduplicate against database
     const newArticles = await this.deduplicate(rawArticles);
     console.log(`[Pipeline] ${newArticles.length} new articles after deduplication`);
+
+    await emit({
+      step: 3,
+      stage: SyncStageEnum.STAGE_DEDUPLICATING,
+      stageName: "STAGE_DEDUPLICATING",
+      fetchedCount: rawArticles.length,
+      newCandidates: newArticles.length,
+      message: `Deduplicación SHA-256 completada: ${rawArticles.length} escaneados → ${newArticles.length} candidatos nuevos`,
+    });
 
     let published = 0;
     let rejected = 0;
@@ -53,13 +104,42 @@ export class IngestionPipeline {
     const batch = newArticles.slice(0, maxBatch);
     console.log(`[Pipeline] Processing batch of ${batch.length} articles...`);
 
+    if (batch.length === 0) {
+      await emit({
+        step: 4,
+        stage: SyncStageEnum.STAGE_CLASSIFYING,
+        stageName: "STAGE_CLASSIFYING",
+        fetchedCount: rawArticles.length,
+        newCandidates: 0,
+        publishedCount: 0,
+        message:
+          "Todas las noticias de las fuentes ya están sincronizadas en Supabase.",
+      });
+    }
+
     // Step 3-5: Process each article in the batch
     for (const article of batch) {
       try {
-        await this.processArticle(article);
-        published++;
+        const assignedCategory = await this.processArticle(article);
+        if (assignedCategory) {
+          published++;
+          await emit({
+            step: 4,
+            stage: SyncStageEnum.STAGE_CLASSIFYING,
+            stageName: "STAGE_CLASSIFYING",
+            sourceName: article.sourceName,
+            articleTitle: article.title,
+            assignedCategory,
+            fetchedCount: rawArticles.length,
+            newCandidates: newArticles.length,
+            publishedCount: published,
+            message: `Clasificado en [${assignedCategory}]: "${article.title.slice(0, 68)}..."`,
+          });
+        } else {
+          rejected++;
+        }
         // Small delay between articles to avoid rate limits
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 900));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.errors.push({
@@ -72,10 +152,35 @@ export class IngestionPipeline {
     }
 
     // Step 6: Manage 30-day retention lifecycle and purge expired/excess articles to free DB space
-    await this.manageRetentionAndPurge();
+    const purgedCount = await this.manageRetentionAndPurge();
+
+    await emit({
+      step: 5,
+      stage: SyncStageEnum.STAGE_RETENTION,
+      stageName: "STAGE_RETENTION",
+      fetchedCount: rawArticles.length,
+      newCandidates: newArticles.length,
+      publishedCount: published,
+      purgedCount,
+      message: `Política de retención 30 días aplicada (${purgedCount} antiguos depurados, máx. 150 en almacenamiento)`,
+    });
 
     const duration = Date.now() - startTime;
     console.log(`[Pipeline] Done in ${duration}ms — published: ${published}, rejected: ${rejected}`);
+
+    await emit({
+      step: 5,
+      stage: SyncStageEnum.STAGE_COMPLETED,
+      stageName: "STAGE_COMPLETED",
+      fetchedCount: rawArticles.length,
+      newCandidates: newArticles.length,
+      publishedCount: published,
+      purgedCount,
+      message:
+        published > 0
+          ? `Stream gRPC finalizado en ${(duration / 1000).toFixed(1)}s: ¡${published} nuevas noticias publicadas!`
+          : `Stream gRPC finalizado en ${(duration / 1000).toFixed(1)}s: Todo está al día (${rawArticles.length} fuentes verificadas).`,
+    });
 
     return {
       fetched: rawArticles.length,
@@ -92,18 +197,25 @@ export class IngestionPipeline {
   // STEP 1: FETCH
   // ─────────────────────────────────────────────
 
-  private async fetchAll(): Promise<RawArticle[]> {
+  private async fetchAll(
+    onSourceFetched?: (sourceName: string, totalSoFar: number) => Promise<void>
+  ): Promise<RawArticle[]> {
     const fetchers = getAllFetchers();
-    const results = await Promise.allSettled(
-      fetchers.map((fetcher) => fetcher.safeFetch())
+    const articles: RawArticle[] = [];
+
+    await Promise.allSettled(
+      fetchers.map(async (fetcher) => {
+        const res = await fetcher.safeFetch();
+        if (res.length > 0) {
+          articles.push(...res);
+          if (onSourceFetched) {
+            await onSourceFetched(res[0].sourceName, articles.length);
+          }
+        }
+        return res;
+      })
     );
 
-    const articles: RawArticle[] = [];
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        articles.push(...result.value);
-      }
-    }
     return articles;
   }
 
@@ -138,10 +250,8 @@ export class IngestionPipeline {
   // STEP 3-5: CLASSIFY + SUMMARIZE + PUBLISH
   // ─────────────────────────────────────────────
 
-  private async processArticle(article: RawArticle): Promise<void> {
+  private async processArticle(article: RawArticle): Promise<string | null> {
     // Find or create the source in DB.
-    // We match by `name` (unique) because the seed already saved each source
-    // with its official slug (e.g. "devto"), which slugify() would not reproduce.
     const source = await prisma.source.upsert({
       where: { name: article.sourceName },
       update: { lastFetchedAt: new Date() },
@@ -179,7 +289,7 @@ export class IngestionPipeline {
         where: { id: saved.id },
         data: { status: ArticleStatus.REJECTED, rawContent: "" },
       });
-      return;
+      return null;
     }
 
     // Summarize
@@ -217,6 +327,8 @@ export class IngestionPipeline {
         },
       }),
     ]);
+
+    return classification.category;
   }
 
   // ─────────────────────────────────────────────

@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package pullia.pipeline.v1;
+
+// ============================================================================
+// PULL-IA / SoftStack • Deplhoy — gRPC News Ingestion & AI Pipeline Contract
+// ============================================================================
+
+service NewsPipelineService {
+  // Server-Side Streaming RPC: emits real-time progress events as the pipeline
+  // fetches RSS/API sources, deduplicates URLs, classifies with Gemini AI,
+  // and applies the 30-day retention policy.
+  rpc StreamSyncProgress (SyncRequest) returns (stream SyncProgressEvent);
+
+  // Unary RPC: returns a snapshot of the pipeline telemetry and category counts.
+  rpc GetPipelineStatus (StatusRequest) returns (PipelineStatusResponse);
+}
+
+enum SyncStage {
+  STAGE_UNSPECIFIED = 0;
+  STAGE_INIT = 1;
+  STAGE_FETCHING = 2;
+  STAGE_DEDUPLICATING = 3;
+  STAGE_CLASSIFYING = 4;
+  STAGE_RETENTION = 5;
+  STAGE_COMPLETED = 6;
+  STAGE_ERROR = 7;
+}
+
+message SyncRequest {
+  int32 max_batch = 1;
+  string triggered_by = 2;
+}
+
+message SyncProgressEvent {
+  int32 step = 1;
+  int32 total_steps = 2;
+  SyncStage stage = 3;
+  string stage_name = 4;
+  string message = 5;
+  string source_name = 6;
+  string article_title = 7;
+  string assigned_category = 8;
+  int32 fetched_count = 9;
+  int32 new_candidates = 10;
+  int32 published_count = 11;
+  int32 purged_count = 12;
+  int64 elapsed_ms = 13;
+  int32 protobuf_bytes = 14;
+  int32 json_bytes = 15;
+}
+
+message StatusRequest {
+  bool include_category_breakdown = 1;
+}
+
+message CategoryCount {
+  string category = 1;
+  int32 total_articles = 2;
+}
+
+message PipelineStatusResponse {
+  string service_version = 1;
+  string protocol = 2;
+  int32 total_published = 3;
+  int32 max_retention_days = 4;
+  int32 max_capacity = 5;
+  repeated CategoryCount categories = 6;
+  int64 timestamp_ms = 7;
+}

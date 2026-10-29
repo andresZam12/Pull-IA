@@ -13,7 +13,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "grpc:server": "tsx scripts/grpc-server.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -21,6 +22,8 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
     "@google/generative-ai": "^0.24.1",
+    "@grpc/grpc-js": "^1.14.6",
+    "@grpc/proto-loader": "^0.8.1",
     "@prisma/client": "^6.19.3",
     "@types/nodemailer": "^8.0.2",
     "@upstash/ratelimit": "^2.2.0",
@@ -29,6 +32,7 @@
     "next-auth": "^5.0.0-beta.32",
     "nodemailer": "^8.0.11",
     "prisma": "^6.19.3",
+    "protobufjs": "^8.8.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "resend": "^6.31.0",
