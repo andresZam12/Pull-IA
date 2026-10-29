@@ -13,22 +13,22 @@ import { Category } from "@/types";
 export const subscribeSchema = z.object({
   email: z
     .string()
-    .email("Please enter a valid email address")
-    .max(254, "Email is too long")
+    .email("Por favor ingresa un correo electrónico válido")
+    .max(254, "El correo es demasiado largo")
     .toLowerCase()
     .trim(),
   name: z
     .string()
-    .min(2, "Name must be at least 2 characters")
-    .max(100, "Name is too long")
+    .min(2, "El nombre debe tener al menos 2 caracteres")
+    .max(100, "El nombre es demasiado largo")
     .trim()
     .optional(),
   locale: z.enum(["es", "en"]).default("es"),
   interests: z
     .array(z.nativeEnum(Category))
-    .min(1, "Select at least one interest")
-    .max(4)
-    .default([Category.AI, Category.ENGINEERING, Category.PROGRAMMING, Category.EMPLOYABILITY]),
+    .min(1, "Selecciona al menos una sección de interés")
+    .max(5)
+    .default([Category.AI, Category.ENGINEERING, Category.MODELS, Category.EMPLOYABILITY]),
 });
 
 export type SubscribeInput = z.infer<typeof subscribeSchema>;
